@@ -23,6 +23,12 @@
 - 不引入本计划依赖清单之外的第三方库
 - 每个 Task 结束必须 git commit
 
+### v1.1 追加约束（Task 15–17）
+
+- 100 个情感问题完整内置于 `backend/templates/question_bank.json`，作为选题灵感库唯一来源之一
+- 自动选题不得选中已被任何内容包关联过的主题；发布过的问题因此天然不可重复
+- `ensure_seed` 必须增量幂等：按 conflict 文本判重插入，重复运行不产生重复行
+
 ## File Structure
 
 ```
@@ -3584,9 +3590,558 @@ git commit -m "feat: 构建集成、启动脚本与README"
 
 ---
 
+### Task 15: 情感问题库资产与项目级 skill
+
+**Files:**
+- Create: `backend/templates/question_bank.json`, `.opencode/skill/emotion-bank/SKILL.md`
+- Modify: `backend/app/seed.py`（增量幂等 + 并入问题库）
+- Test: 修改 `backend/tests/test_topics.py` 的种子测试
+
+**Interfaces:**
+- Produces: `question_bank.json`（10 组 × 10 问）；`ensure_seed` v2——从常量种子与 question_bank.json 双源增量插入，按 conflict 判重；topics 表新增 ≥100 行问题类主题
+
+- [ ] **Step 1: 更新种子测试（先改测试）**
+
+把 `backend/tests/test_topics.py` 中 `test_seed_idempotent` 替换为：
+
+```python
+def test_seed_idempotent(test_session):
+    ensure_seed(test_session)
+    ensure_seed(test_session)
+    total = test_session.query(Topic).count()
+    assert total >= 100
+    conflicts = [c for (c,) in test_session.query(Topic.conflict).all()]
+    assert len(conflicts) == len(set(conflicts))
+```
+
+并在该文件顶部导入处确认包含：`from app.seed import ensure_seed`。
+
+- [ ] **Step 2: 运行测试确认失败**
+
+Run: `.venv\Scripts\python -m pytest tests/test_topics.py -v`
+Expected: FAIL（总数不足 100 或重复）
+
+- [ ] **Step 3: 创建问题库 JSON**
+
+`backend/templates/question_bank.json`（完整内容，一次写入）：
+
+```json
+{
+  "sections": [
+    {
+      "name": "自我认知",
+      "drive_type": "恐惧",
+      "questions": [
+        "你认为自己在感情中最需要的是什么？",
+        "你在感情中最大的优点是什么？",
+        "你的哪些行为可能会阻碍你的感情发展？",
+        "你是否了解自己的情感触发点？",
+        "你通常如何表达自己的爱意？",
+        "在一段关系中，你最害怕失去什么？",
+        "你觉得自己在感情中足够独立吗？",
+        "你是否容易陷入过去的感情阴影中？",
+        "你是否经常反思自己在感情中的表现？",
+        "你认为自己有哪些地方需要改进以更好地维护感情？"
+      ]
+    },
+    {
+      "name": "伴侣关系",
+      "drive_type": "站队",
+      "questions": [
+        "你和伴侣之间有哪些共同的兴趣爱好？",
+        "你们之间的主要沟通方式是什么？",
+        "你觉得伴侣最吸引你的地方是什么？",
+        "你是否了解伴侣的价值观和人生目标？",
+        "你们是否有过深入的对话，讨论彼此的未来规划？",
+        "你们在争吵时通常如何解决分歧？",
+        "你是否觉得伴侣尊重你的个人空间和需求？",
+        "你们是否经常一起创造美好的回忆？",
+        "你对伴侣的期望是否合理且明确？",
+        "你是否愿意为伴侣做出改变或妥协？"
+      ]
+    },
+    {
+      "name": "信任与忠诚",
+      "drive_type": "恐惧",
+      "questions": [
+        "你是否完全信任伴侣？",
+        "你有没有发现过伴侣对你隐瞒的事情？",
+        "你是否觉得伴侣在感情上对你忠诚？",
+        "当伴侣与其他异性交往时，你是否会感到不安？",
+        "你是否曾经怀疑过伴侣的感情？",
+        "你是否愿意分享自己的秘密和隐私给伴侣？",
+        "你是否相信伴侣会支持你度过困难时期？",
+        "你是否觉得伴侣对你的信任是坚定的？",
+        "你是否觉得伴侣在你面前是真实的自己？",
+        "你是否曾经因为不信任而伤害过伴侣？"
+      ]
+    },
+    {
+      "name": "沟通与理解",
+      "drive_type": "窥私",
+      "questions": [
+        "你是否觉得与伴侣之间的沟通顺畅无阻？",
+        "你是否经常倾听伴侣的想法和感受？",
+        "你是否愿意向伴侣表达自己的不满和需求？",
+        "你是否觉得伴侣能够理解你的立场和观点？",
+        "你们是否经常一起制定决策并共同承担责任？",
+        "你是否觉得伴侣在沟通时足够坦诚和直接？",
+        "你是否曾经因为沟通不畅而产生误解？",
+        "你是否愿意学习新的沟通技巧来改善关系？",
+        "你是否觉得伴侣在沟通时能够给予你足够的关注和支持？",
+        "你是否觉得伴侣在沟通时能够保持冷静和理性？"
+      ]
+    },
+    {
+      "name": "冲突解决与处理",
+      "drive_type": "站队",
+      "questions": [
+        "你们之间是否经常出现冲突？",
+        "当发生冲突时，你们通常如何解决？",
+        "你是否觉得伴侣在处理冲突时足够成熟和理智？",
+        "你是否曾经因为冲动而说出伤人的话？",
+        "你是否愿意为了和平而主动道歉或寻求和解？",
+        "你是否觉得伴侣在处理冲突时能够保持公正和客观？",
+        "你是否觉得伴侣在冲突后能够迅速恢复情绪并继续前行？",
+        "你是否曾经因为无法忍受冲突而选择逃避或放弃？",
+        "你是否觉得伴侣在冲突中能够给予你足够的理解和包容？",
+        "你是否愿意为了改善关系而接受专业的咨询或帮助？"
+      ]
+    },
+    {
+      "name": "未来规划与承诺",
+      "drive_type": "比较",
+      "questions": [
+        "你是否对未来充满期待并与伴侣共同规划？",
+        "你是否觉得伴侣与你对未来的看法一致？",
+        "你们是否已经讨论了结婚或组建家庭的计划？",
+        "你是否愿意为了共同的未来而努力工作和奋斗？",
+        "你是否觉得伴侣是一个可以共度余生的人？",
+        "你是否觉得伴侣对你的承诺是坚定和真诚的？",
+        "你是否曾经因为对未来的不确定而感到焦虑或担忧？",
+        "你是否觉得伴侣在为你们的未来付出努力？",
+        "你是否愿意为了伴侣而放弃一些个人的梦想和目标？",
+        "你是否觉得伴侣在你们的未来规划中扮演了积极的角色？"
+      ]
+    },
+    {
+      "name": "爱情观与价值观",
+      "drive_type": "站队",
+      "questions": [
+        "你对爱情的看法是什么？",
+        "你是否觉得爱情是生活中最重要的一部分？",
+        "你是否愿意为了爱情而牺牲某些物质利益？",
+        "你是否觉得伴侣的爱情观与你相符？",
+        "你是否觉得爱情应该建立在互相尊重和理解的基础上？",
+        "你是否觉得爱情需要经历考验才能更加坚固？",
+        "你是相信一见钟情还是更倾向于日久生情？",
+        "你是否觉得爱情需要不断经营和维护？",
+        "你是否觉得伴侣对你的爱是真挚和无私的？",
+        "你是否愿意为了爱情而改变自己的某些习惯或观念？"
+      ]
+    },
+    {
+      "name": "家庭与朋友的影响",
+      "drive_type": "比较",
+      "questions": [
+        "你的家人对你们的感情有何看法？",
+        "你是否觉得家人的意见对你们的感情有影响？",
+        "你们是否与对方的家人建立了良好的关系？",
+        "你是否觉得朋友对你们的感情持支持态度？",
+        "你是否觉得朋友的建议对你们的感情有帮助？",
+        "你们是否经常一起参加家庭聚会或活动？",
+        "你是否觉得伴侣与你的家人相处融洽？",
+        "你是否觉得伴侣的朋友对你的感情有影响？",
+        "你是否愿意为了伴侣而与某些朋友保持距离？",
+        "你是否觉得伴侣在处理家庭和朋友关系时足够成熟和理智？"
+      ]
+    },
+    {
+      "name": "个人成长与变化",
+      "drive_type": "欲望",
+      "questions": [
+        "你是否觉得自己在感情中成长了许多？",
+        "你是否觉得伴侣也在不断地成长和进步？",
+        "你们是否一起经历了许多挑战并从中获得了力量？",
+        "你是否觉得伴侣在帮助你成为更好的人方面发挥了重要作用？",
+        "你是否愿意为了个人成长而接受新的挑战和机遇？",
+        "你是否觉得伴侣在追求个人梦想和目标时给予了足够的支持和鼓励？",
+        "你是否觉得伴侣在帮助你克服困难和挫折方面发挥了积极作用？",
+        "你是否觉得伴侣在推动你走出舒适区方面起到了关键作用？",
+        "你是否觉得伴侣在促进你个人成长和发展方面做出了贡献？",
+        "你是否愿意为了伴侣的成长而共同努力和学习新知识？"
+      ]
+    },
+    {
+      "name": "分手与复合",
+      "drive_type": "窥私",
+      "questions": [
+        "你是否曾经经历过分手的痛苦？",
+        "你是否觉得分手是因为无法解决的分歧或矛盾？",
+        "你是否曾经试图挽回一段已经结束的感情？",
+        "你是否觉得复合后的感情更加珍贵和牢固？",
+        "你是否觉得分手是一种解脱还是一种遗憾？",
+        "你是否愿意为了复合而付出努力和代价？",
+        "你是否觉得伴侣也愿意为了复合而努力？",
+        "你是否觉得分手后还能做朋友？",
+        "你是否觉得分手的经历让你学会了更多关于爱情和人生的道理？",
+        "你是否觉得即使分手了也能从中汲取教训并为未来的感情做好准备？"
+      ]
+    }
+  ]
+}
+```
+
+- [ ] **Step 4: 创建项目级 skill**
+
+`.opencode/skill/emotion-bank/SKILL.md`：
+
+```markdown
+---
+name: emotion-bank
+description: 情感选题灵感库。为本项目生成公众号情感内容选题、冲突或文案时使用；从 100 个结构化情感问题中取材并结合人性驱动类型展开。
+---
+
+# 情感选题灵感库
+
+灵感源文件：`backend/templates/question_bank.json`
+
+使用方法：
+
+1. 读取该 JSON，得到 10 个分类 × 各 10 个问题的结构
+2. 每个分类已映射人性驱动类型（欲望/比较/恐惧/窥私/站队）
+3. 生成选题时：
+   - 从未使用的问题中挑选（查询 topics 表中未被 articles 关联的记录）
+   - 把问题转写为一个「年龄/身份 + 个人状态 + 冲突疑问」式标题
+   - 冲突要具体、有画面感，避免说教
+4. 该库同时被后端 `ensure_seed` 自动并入 topics 表；人工新增主题请走工作台主题库页面
+
+注意：不要凭空编造问题库里没有方向的主题；如需扩展，先向用户确认再追加到 JSON。
+```
+
+- [ ] **Step 5: 实现 seed v2**
+
+`backend/app/seed.py` 整体替换：
+
+```python
+import json
+from pathlib import Path
+
+from sqlalchemy.orm import Session
+
+from app.models import Topic
+
+SEED_TOPICS = [
+    ("欲望", "情感关系", "越成熟的女人越有魅力，是被生活打磨出来的"),
+    ("比较", "年龄变化", "同龄人都结婚生子了，我还在等什么"),
+    ("恐惧", "情感关系", "如果一直遇不到合适的人，该怎么办"),
+    ("窥私", "婚姻", "一个40岁的女人离婚后，过得好吗"),
+    ("站队", "婚姻", "婚姻应该选择爱情，还是稳定"),
+    ("比较", "女性成长", "月薪五万以后，为什么还是不快乐"),
+    ("恐惧", "年龄变化", "35岁以后，是不是就没有资格挑了"),
+    ("欲望", "两性关系", "被选择和主动选择，哪个更让人安心"),
+    ("窥私", "成年人的现实", "那些嫁得好的女生，后来都怎么样了"),
+    ("站队", "情感关系", "心动和稳定，只能选一个"),
+    ("比较", "人生阶段", "38岁还单身，真的比结婚晚了吗"),
+    ("恐惧", "成年人的现实", "存款和安全感，到底哪个先来"),
+]
+
+BANK_PATH = Path("templates") / "question_bank.json"
+
+
+def _bank_rows() -> list[tuple[str, str, str]]:
+    if not BANK_PATH.exists():
+        return []
+    data = json.loads(BANK_PATH.read_text(encoding="utf-8"))
+    rows = []
+    for section in data.get("sections", []):
+        for question in section.get("questions", []):
+            rows.append((section["drive_type"], section["name"], question))
+    return rows
+
+
+def ensure_seed(session: Session) -> None:
+    existing = {c for (c,) in session.query(Topic.conflict).all()}
+    added = False
+    for drive_type, category, conflict in [*SEED_TOPICS, *_bank_rows()]:
+        if conflict in existing:
+            continue
+        session.add(Topic(drive_type=drive_type, category=category, conflict=conflict))
+        existing.add(conflict)
+        added = True
+    if added:
+        session.commit()
+```
+
+- [ ] **Step 6: 运行测试确认通过**
+
+Run: `.venv\Scripts\python -m pytest tests/test_topics.py -v`
+Expected: 全部通过（含 ≥100 且无重复断言）
+
+- [ ] **Step 7: Commit**
+
+```powershell
+git add -A
+git commit -m "feat: 情感问题库100问资产化与增量种子"
+```
+
+---
+
+### Task 16: 全自动选题端点与去重闭环（后端）
+
+**Files:**
+- Create: 无新文件
+- Modify: `backend/app/services/pipeline.py`（追加 pick_unused_topic / auto_generate）、`backend/app/routers/generation.py`（追加 auto 端点）
+- Test: `backend/tests/test_auto_api.py`
+
+**Interfaces:**
+- Consumes: Task 6 pipeline、Task 7 路由模式、Task 15 问题库主题
+- Produces:
+  - `pick_unused_topic(db) -> Topic | None`：启用且未被任何 Article.topic_id 关联的主题中随机一个
+  - `auto_generate(db, llm, ark, storage_root, default_size, max_count) -> Article`：选 题 → 冲突标题（取首候选）→ 正文 → 配图 → 入库
+  - `POST /api/generation/auto?count=N` → `{"articles": [ArticleOut...], "errors": []}`，N∈[1,5]，题库用尽时 errors 收录说明并停止
+
+- [ ] **Step 1: 写失败测试**
+
+`backend/tests/test_auto_api.py`：
+
+```python
+import pytest
+from sqlalchemy.orm import sessionmaker
+
+from tests.test_pipeline import FakeArk, FakeLLM
+
+
+def bank_llm(n):
+    responses = []
+    for _ in range(n):
+        responses += [
+            {"candidates": [{"conflict": "自动冲突", "titles": ["自动标题一", "t2", "t3", "t4", "t5"]}]},
+            {"body": "全自动生成的正文内容大概三十个字左右了", "mood": "清晨厨房"},
+            {"image_prompt": "auto candid photo"},
+        ]
+    return FakeLLM(responses)
+
+
+def test_auto_creates_distinct_articles(client):
+    client.app.state.llm = bank_llm(2)
+    client.app.state.ark = FakeArk()
+    r = client.post("/api/generation/auto?count=2")
+    assert r.status_code == 200
+    body = r.json()
+    assert len(body["articles"]) == 2
+    assert len({a["topic_id"] for a in body["articles"]}) == 2
+    assert all(a["title"] == "自动标题一" for a in body["articles"])
+
+
+def test_auto_exhaustion(test_engine, tmp_path):
+    from fastapi.testclient import TestClient
+
+    from app.database import Base
+    from app.main import create_app
+    from app.models import Topic
+    from app.services.pipeline import auto_generate
+
+    Base.metadata.create_all(test_engine)
+    Session = sessionmaker(bind=test_engine, autoflush=False)
+    create_app(
+        session_factory=Session,
+        db_engine=test_engine,
+        storage_root=str(tmp_path / "storage"),
+    )
+
+    db = Session()
+    db.add(Topic(drive_type="欲望", category="x", conflict="唯一的问题"))
+    db.commit()
+
+    def make_llm():
+        return FakeLLM([
+            {"candidates": [{"conflict": "c", "titles": ["t1", "t2", "t3", "t4", "t5"]}]},
+            {"body": "正文内容字数大概在合适范围之内了", "mood": "m"},
+            {"image_prompt": "p"},
+        ])
+
+    art = auto_generate(db, make_llm(), FakeArk(), tmp_path / "storage", "1080x1620", 3)
+    assert art.topic_id is not None
+    with pytest.raises(ValueError, match="已全部使用"):
+        auto_generate(db, make_llm(), FakeArk(), tmp_path / "storage", "1080x1620", 3)
+    db.close()
+```
+
+说明：每生成一篇消耗 3 条 LLM 响应，`bank_llm(n)` 按 n 篇预置；`test_auto_exhaustion` 用单主题小库确定性验证去重与耗尽报错。
+
+- [ ] **Step 2: 运行测试确认失败**
+
+Run: `.venv\Scripts\python -m pytest tests/test_auto_api.py -v`
+Expected: FAIL（ImportError: auto_generate）
+
+- [ ] **Step 3: 实现 pipeline 追加函数**
+
+`backend/app/services/pipeline.py` 顶部导入区补充：
+
+```python
+import random
+
+from sqlalchemy import func
+```
+
+末尾追加：
+
+```python
+def pick_unused_topic(db: Session) -> Topic | None:
+    used_ids = db.query(Article.topic_id).filter(Article.topic_id.isnot(None))
+    return (
+        db.query(Topic)
+        .filter(Topic.enabled.is_(True), ~Topic.id.in_(used_ids))
+        .order_by(func.random())
+        .first()
+    )
+
+
+def auto_generate(db: Session, llm, ark, storage_root: Path,
+                  default_size: str, max_count: int) -> Article:
+    topic = pick_unused_topic(db)
+    if topic is None:
+        raise ValueError("题库中的问题已全部使用")
+    candidates = draft_conflicts(db, llm, topic_id=topic.id)
+    first = candidates[0]
+    data = BuildIn(
+        topic_id=topic.id,
+        conflict=first.conflict,
+        title=first.titles[0],
+        image_size=default_size,
+        image_count=1,
+        candidates=candidates,
+    )
+    return build_article(
+        db, llm, ark, data,
+        storage_root=storage_root,
+        default_size=default_size,
+        max_count=max_count,
+    )
+```
+
+- [ ] **Step 4: 实现 auto 路由**
+
+`backend/app/routers/generation.py` 末尾追加：
+
+```python
+@router.post("/generation/auto")
+def api_auto(request: Request, count: int = 1, db: Session = Depends(get_db)):
+    n = min(max(count, 1), 5)
+    articles = []
+    errors = []
+    for _ in range(n):
+        try:
+            article = pipeline.auto_generate(
+                db, request.app.state.llm, request.app.state.ark,
+                storage_root=request.app.state.storage_root,
+                default_size=request.app.state.default_size,
+                max_count=request.app.state.max_count,
+            )
+            articles.append(ArticleOut.model_validate(article))
+        except ValueError as exc:
+            errors.append(str(exc))
+            break
+        except Exception as exc:
+            errors.append(f"生成失败: {exc}")
+    if not articles and errors:
+        raise HTTPException(400, errors[0])
+    return {"articles": articles, "errors": errors}
+```
+
+- [ ] **Step 5: 运行全部后端测试**
+
+Run: `.venv\Scripts\python -m pytest -v`
+Expected: 全部通过
+
+- [ ] **Step 6: Commit**
+
+```powershell
+git add -A
+git commit -m "feat: 全自动选题端点与已用主题去重"
+```
+
+---
+
+### Task 17: 前端「AI 全自动」入口与验收补充
+
+**Files:**
+- Modify: `frontend/src/views/HomeView.vue`
+- Modify: `README.md` 使用流程、Task 14 验收清单执行时同步本节条目
+
+**Interfaces:**
+- Consumes: `POST /api/generation/auto?count=N`
+- Produces: 首页一键批量生成待审内容；人工仅审核
+
+- [ ] **Step 1: HomeView 增加 autoGenerate**
+
+`frontend/src/views/HomeView.vue` `<script setup>` 中追加（ElMessageBox 已导入）：
+
+```js
+async function autoGenerate() {
+  try {
+    const { value } = await ElMessageBox.prompt('本次让 AI 自动生成几篇？（1–5）', 'AI 全自动', {
+      inputValue: '1',
+      inputPattern: /^[1-5]$/,
+      inputErrorMessage: '请输入 1 到 5 的数字',
+      confirmButtonText: '开始生成',
+    })
+    loading.value = true
+    const { data } = await api.post('/generation/auto', null, { params: { count: Number(value) } })
+    ElMessage.success(`已生成 ${data.articles.length} 篇，请到列表逐篇审核`)
+    load()
+  } catch (err) {
+    if (err !== 'cancel' && err?.message !== 'cancel') load()
+  } finally {
+    loading.value = false
+  }
+}
+```
+
+模板工具栏「新建内容」按钮旁追加：
+
+```html
+<el-button type="success" @click="autoGenerate">AI 全自动</el-button>
+```
+
+- [ ] **Step 2: README 使用流程更新**
+
+将 README「使用流程」第 1–2 步之间插入一行：
+
+```markdown
+2. （推荐）首页点「AI 全自动」输入篇数，AI 自动从未用过的问题里选题成稿；也可走「新建内容」手动指定主题
+```
+
+原第 2 步及以后序号顺延。
+
+- [ ] **Step 3: 手动验证（真实 key）**
+
+Expected:
+- 点「AI 全自动」生成 2 篇 → 两篇对应不同主题；再点生成不会出现相同主题
+- 把某篇删除后再次全自动 → 该主题可重新出现
+- 全部主题用尽时提示「题库中的问题已全部使用」
+
+- [ ] **Step 4: 验收清单增补（并入 Task 14 清单一起勾选）**
+
+- [ ] 连续两次全自动生成的文章 topic_id 不同
+- [ ] 已生成过内容包的主题不再被自动选中
+- [ ] 删除内容包后其主题恢复可选
+- [ ] 题库耗尽时返回明确错误且前端有提示
+- [ ] question_bank.json 100 问全部出现在主题库页面（按分类筛选可见）
+
+- [ ] **Step 5: Commit**
+
+```powershell
+git add -A
+git commit -m "feat: 首页AI全自动入口与验收增补"
+```
+
+---
+
 ## 计划完成定义
 
-以上 14 个任务全部完成并通过验收清单，即达成第一期 MVP：本地可视化工作台完成「选题→成稿→配图→审核→导出」闭环。后续迭代方向（不在本计划内）：公众号草稿箱 API 对接、数据反馈系统。
+以上 17 个任务全部完成并通过验收清单，即达成第一期 MVP（含 v1.1 全自动选题）：本地可视化工作台完成「AI 自动选题→成稿→配图→人工审核→导出」闭环，已使用的问题不重复。后续迭代方向（不在本计划内）：公众号草稿箱 API 对接、数据反馈系统。
 
 
 
