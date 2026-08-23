@@ -1,3 +1,7 @@
+import os
+
+os.environ["WECHATGZH_AUTO_CREATE"] = "0"
+
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker

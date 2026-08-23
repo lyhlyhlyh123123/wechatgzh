@@ -35,4 +35,7 @@ def create_app(session_factory: sessionmaker | None = None, db_engine=None) -> F
     return app
 
 
-app = create_app()
+import os
+
+if os.environ.get("WECHATGZH_AUTO_CREATE", "1") == "1":
+    app = create_app()
