@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import sessionmaker
 
 from app.database import Base, SessionLocal, engine, get_db
-from app.routers import topics
+from app.routers import prompts_api, topics
 from app.seed import ensure_seed
 
 
@@ -32,6 +32,7 @@ def create_app(session_factory: sessionmaker | None = None, db_engine=None) -> F
     with SF() as db:
         ensure_seed(db)
     app.include_router(topics.router)
+    app.include_router(prompts_api.router)
     return app
 
 
