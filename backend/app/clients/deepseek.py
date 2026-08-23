@@ -32,10 +32,14 @@ class DeepSeekClient:
         for i in range(self.retries):
             try:
                 return self._once(system, user, temperature)
-            except (DeepSeekError, httpx.HTTPStatusError) as exc:
+            except httpx.HTTPStatusError as exc:
+                if exc.response.status_code != 429 and exc.response.status_code < 500:
+                    raise
                 last_exc = exc
-                if i < self.retries - 1:
-                    time.sleep(1)
+            except DeepSeekError as exc:
+                last_exc = exc
+            if i < self.retries - 1:
+                time.sleep(1)
         raise DeepSeekError(f"生成失败（已重试{self.retries}次）: {last_exc}")
 
     def _once(self, system: str, user: str, temperature: float) -> dict:

@@ -81,3 +81,16 @@ def test_ark_raises_when_empty(tmp_path):
     )
     with pytest.raises(RuntimeError):
         client.generate_image("p", "1080x1620", tmp_path / "x.jpg")
+
+
+def test_deepseek_no_retry_on_401():
+    calls = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        return httpx.Response(401, json={"error": "bad key"})
+
+    client = DeepSeekClient("https://fake", "k", "m", transport=httpx.MockTransport(handler))
+    with pytest.raises(httpx.HTTPStatusError):
+        client.chat_json("s", "u")
+    assert calls["n"] == 1
