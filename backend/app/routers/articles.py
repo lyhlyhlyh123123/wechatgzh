@@ -77,3 +77,23 @@ def delete_article(article_id: int, request: Request, db: Session = Depends(get_
     shutil.rmtree(folder, ignore_errors=True)
     db.delete(article)
     db.commit()
+
+
+from fastapi.responses import Response
+
+from app.services.export import build_zip
+
+
+@router.get("/{article_id}/export.zip")
+def export_article(article_id: int, request: Request, db: Session = Depends(get_db)):
+    try:
+        article = pipeline.get_article(db, article_id)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc))
+    content = build_zip(article, Path(request.app.state.storage_root))
+    filename = f"article_{article_id}.zip"
+    return Response(
+        content=content,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
