@@ -2,13 +2,14 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import sessionmaker
 
 from app.clients.ark import ArkClient
 from app.clients.deepseek import DeepSeekClient
 from app.config import settings
 from app.database import Base, SessionLocal, engine, get_db
-from app.routers import articles, generation, prompts_api, topics
+from app.routers import articles, generation, prompts_api, settings_api, topics
 from app.seed import ensure_seed
 
 
@@ -56,6 +57,11 @@ def create_app(session_factory: sessionmaker | None = None, llm=None, ark=None,
     app.include_router(generation.router)
     app.include_router(articles.router)
     app.include_router(prompts_api.router)
+    app.include_router(settings_api.router)
+
+    static_dir = Path("static")
+    if (static_dir / "index.html").exists():
+        app.mount("/", StaticFiles(html=True), name="spa")
     return app
 
 
