@@ -32,6 +32,6 @@ def client(test_engine):
     from app.main import create_app
 
     Session = sessionmaker(bind=test_engine, autoflush=False)
-    app = create_app(session_factory=Session)
+    app = create_app(session_factory=Session, db_engine=test_engine)
     with TestClient(app) as c:
         yield c
