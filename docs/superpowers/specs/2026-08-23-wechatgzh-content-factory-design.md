@@ -121,7 +121,7 @@ id、article_id（可空，成稿前也记录）、stage（conflict/titles/body/
 2. **LLM 调用①**（`POST /api/generation/draft-conflicts`）：生成结构化 JSON——3 个情感冲突候选 × 各 5 个标题候选。前端向导展示供挑选，默认取第一个
 3. **LLM 调用②**（`POST /api/generation/build` 入口）：按选定冲突+标题生成第一人称正文。提示词约束：过去→变化→矛盾→困惑结构、第一人称真人口吻、有矛盾有留白、不像鸡汤；**长度 30–60 字**，短文案形态，适配贴图展示
 4. **LLM 调用③**：根据正文情绪生成图片 prompt（真实感、手机摄影感、生活化、自然光、有故事感；负面约束：明星写真、网红脸、过度精修）
-5. **ARK 文生图**：默认 1 张 3:4 竖图，数量可配置 1–3，存入 storage/runs/<article_id>/
+5. **ARK 文生图**：默认 1 张 1:1 方图 1080×1080（信息流完整显示、无需展开），数量可配置 1–3；尺寸为预设可配置项：`1:1(1080×1080)` / `2:3(1080×1620)` / `3:4(750×1000)` / `16:9(1920×1080)` / `9:16(1080×1920)`，新建向导中可切换，存入 storage/runs/<article_id>/
 6. 写库，状态 `draft`，跳转详情页
 
 ### 局部重生（独立接口）
@@ -188,7 +188,8 @@ DEEPSEEK_MODEL=deepseek-chat
 VOLCENGINE_ARK_API_KEY=
 VOLCENGINE_ARK_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
 VOLCENGINE_ARK_IMAGE_MODEL=
-IMAGE_SIZE=1536x2048
+IMAGE_PRESET=1:1_1080x1080,2:3_1080x1620,3:4_750x1000,16:9_1920x1080,9:16_1080x1920
+IMAGE_SIZE_DEFAULT=1080x1080
 IMAGE_COUNT_DEFAULT=1
 IMAGE_COUNT_MAX=3
 HOST=127.0.0.1
