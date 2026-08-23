@@ -61,6 +61,7 @@ class BuildIn(BaseModel):
     title: str
     image_size: str | None = None
     image_count: int | None = None
+    candidates: list[Candidate] | None = None
 
 
 class ArticlePatch(BaseModel):
