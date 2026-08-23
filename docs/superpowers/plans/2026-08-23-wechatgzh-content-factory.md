@@ -670,14 +670,13 @@ def create_app(session_factory: sessionmaker | None = None, db_engine=None) -> F
     return app
 
 
-app = create_app()
+import os
+
+if os.environ.get("WECHATGZH_AUTO_CREATE", "1") == "1":
+    app = create_app()
 ```
 
-conftest 的 `client` fixture 相应传入 engine（此处先给 Task 2 阶段的临时版，Task 7 会给出含 llm/ark/storage 的最终完整版）：
-
-```python
-    app = create_app(session_factory=Session, db_engine=test_engine)
-```
+守卫说明：pytest 的 conftest 会设置 `WECHATGZH_AUTO_CREATE=0`，避免测试导入本模块时触碰文件库；uvicorn 正常启动不受影响。
 
 - [ ] **Step 4: 运行测试确认通过**
 
@@ -748,6 +747,19 @@ def test_deepseek_retries_on_bad_json():
     )
     assert client.chat_json("s", "u") == {"ok": True}
     assert calls["n"] == 2
+
+
+def test_deepseek_no_retry_on_401():
+    calls = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        return httpx.Response(401, json={"error": "bad key"})
+
+    client = DeepSeekClient("https://fake", "k", "m", transport=httpx.MockTransport(handler))
+    with pytest.raises(httpx.HTTPStatusError):
+        client.chat_json("s", "u")
+    assert calls["n"] == 1
 
 
 def test_ark_saves_b64_image(tmp_path):
@@ -903,10 +915,14 @@ class DeepSeekClient:
         for i in range(self.retries):
             try:
                 return self._once(system, user, temperature)
-            except (DeepSeekError, httpx.HTTPStatusError) as exc:
+            except httpx.HTTPStatusError as exc:
+                if exc.response.status_code != 429 and exc.response.status_code < 500:
+                    raise
                 last_exc = exc
-                if i < self.retries - 1:
-                    time.sleep(1)
+            except DeepSeekError as exc:
+                last_exc = exc
+            if i < self.retries - 1:
+                time.sleep(1)
         raise DeepSeekError(f"生成失败（已重试{self.retries}次）: {last_exc}")
 
     def _once(self, system: str, user: str, temperature: float) -> dict:
@@ -973,20 +989,20 @@ class ArkClient:
             resp.raise_for_status()
             raw = resp.json()
 
-        data = raw.get("data") or []
-        if not data:
-            raise RuntimeError("ARK 未返回图片数据")
+            data = raw.get("data") or []
+            if not data:
+                raise RuntimeError("ARK 未返回图片数据")
 
-        item = data[0]
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        if item.get("b64_json"):
-            output_path.write_bytes(base64.b64decode(item["b64_json"]))
-        elif item.get("url"):
-            dl = client.get(item["url"])
-            dl.raise_for_status()
-            output_path.write_bytes(dl.content)
-        else:
-            raise RuntimeError("ARK 响应缺少图片内容")
+            item = data[0]
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            if item.get("b64_json"):
+                output_path.write_bytes(base64.b64decode(item["b64_json"]))
+            elif item.get("url"):
+                dl = client.get(item["url"])
+                dl.raise_for_status()
+                output_path.write_bytes(dl.content)
+            else:
+                raise RuntimeError("ARK 响应缺少图片内容")
         return output_path
 ```
 
@@ -1312,7 +1328,7 @@ def gen_body(llm, conflict: str, title: str) -> BodyOut:
         out: BodyOut = _ask(llm, system, user, BodyOut)
         stripped = out.body.strip()
         clean_len = sum(1 for ch in stripped if "\u4e00" <= ch <= "\u9fff")
-        if 20 <= clean_len <= 70:
+        if 15 <= clean_len <= 70:
             return BodyOut(body=stripped, mood=out.mood.strip())
     return out
 
@@ -1323,7 +1339,7 @@ def gen_image_prompt(llm, body: str, mood: str) -> str:
     return out.image_prompt.strip()
 ```
 
-说明：`image_style.txt` 渲染后作为该次调用的 user 消息。`gen_body` 长度校验按汉字数放宽到 20–70 以容忍标点计数差异，超长时重试、末次仍超长则原样返回交人工删减。
+说明：`image_style.txt` 渲染后作为该次调用的 user 消息。`gen_body` 长度校验按汉字数放宽为 15–70：下限容忍短句正文与标点计数差异（用户侧 30–60 字由 body_system 提示词硬性约束），超长时重试、末次仍超长则原样返回交人工删减。
 
 - [ ] **Step 4: 运行测试确认通过**
 
@@ -1834,6 +1850,10 @@ def test_delete_removes_files(client, wired, tmp_path):
 `backend/tests/conftest.py` 整体替换为最终版（占位客户端 + tmp 存储目录）：
 
 ```python
+import os
+
+os.environ["WECHATGZH_AUTO_CREATE"] = "0"
+
 from pathlib import Path
 
 import pytest
@@ -2145,8 +2165,15 @@ def create_app(session_factory: sessionmaker | None = None, llm=None, ark=None,
     return app
 
 
-app = create_app()
+import os
+
+if os.environ.get("WECHATGZH_AUTO_CREATE", "1") == "1":
+    app = create_app()
 ```
+
+守卫说明：conftest 设置 `WECHATGZH_AUTO_CREATE=0` 后，测试导入本模块不会创建/种子化文件库；uvicorn 启动不受影响。
+
+注意：Task 9 的 settings_api 路由就绪后，此处 include_router 列表需追加 `settings_api`。
 
 注意：Task 2 曾让 `test_seed_idempotent` 第二次调用默认参数 `create_app()`——现在会构造真实客户端但不会发起网络请求，安全。
 
