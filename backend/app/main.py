@@ -1,13 +1,19 @@
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import sessionmaker
 
+from app.clients.ark import ArkClient
+from app.clients.deepseek import DeepSeekClient
+from app.config import settings
 from app.database import Base, SessionLocal, engine, get_db
-from app.routers import prompts_api, topics
+from app.routers import articles, generation, prompts_api, topics
 from app.seed import ensure_seed
 
 
-def create_app(session_factory: sessionmaker | None = None, db_engine=None) -> FastAPI:
+def create_app(session_factory: sessionmaker | None = None, llm=None, ark=None,
+               storage_root: str = "storage", db_engine=None) -> FastAPI:
     app = FastAPI(title="wechatgzh")
     app.add_middleware(
         CORSMiddleware,
@@ -31,7 +37,24 @@ def create_app(session_factory: sessionmaker | None = None, db_engine=None) -> F
     SF = session_factory or SessionLocal
     with SF() as db:
         ensure_seed(db)
+
+    app.state.llm = llm or DeepSeekClient(
+        settings.deepseek_base_url,
+        settings.deepseek_api_key,
+        settings.deepseek_model,
+    )
+    app.state.ark = ark or ArkClient(
+        settings.volcengine_ark_base_url,
+        settings.volcengine_ark_api_key,
+        settings.volcengine_ark_image_model,
+    )
+    app.state.storage_root = storage_root
+    app.state.default_size = settings.image_size_default
+    app.state.max_count = settings.image_count_max
+
     app.include_router(topics.router)
+    app.include_router(generation.router)
+    app.include_router(articles.router)
     app.include_router(prompts_api.router)
     return app
 

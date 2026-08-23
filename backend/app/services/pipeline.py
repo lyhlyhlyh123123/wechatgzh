@@ -51,7 +51,7 @@ def draft_conflicts(db: Session, llm, topic_id: int | None = None, idea: str = "
 
 
 def generate_images(ark, article: Article, count: int, storage_root: Path) -> list[str]:
-    folder = storage_root / "runs" / str(article.id)
+    folder = Path(storage_root) / "runs" / str(article.id)
     paths = []
     for i in range(count):
         fname = f"img_{datetime.now().strftime('%Y%m%d%H%M%S')}_{i}.jpg"
@@ -110,4 +110,65 @@ def build_article(db: Session, llm, ark, data: BuildIn, storage_root: Path,
         if topic:
             topic.use_count += 1
             db.commit()
+    return article
+
+
+def get_article(db: Session, article_id: int) -> Article:
+    article = db.get(Article, article_id)
+    if not article:
+        raise ValueError(f"内容包不存在: {article_id}")
+    return article
+
+
+def _current_conflict(article: Article) -> str:
+    for cand in article.title_candidates or []:
+        if isinstance(cand, dict) and article.title in cand.get("titles", []):
+            return cand.get("conflict", "")
+    first = article.title_candidates[0] if article.title_candidates else {}
+    return first.get("conflict", "") if isinstance(first, dict) else ""
+
+
+def regen_titles(db: Session, llm, article_id: int) -> Article:
+    article = get_article(db, article_id)
+    src = (
+        f"现有标题：{article.title}\n"
+        f"冲突方向：{_current_conflict(article)}\n"
+        f"正文片段：{article.body[:50]}"
+    )
+    t0 = time.time()
+    try:
+        candidates = _stage_conflicts(llm, src)
+        article.title_candidates = [c.model_dump() for c in candidates]
+    except Exception as exc:
+        _log(db, article.id, "titles_regen", llm, t0, ok=False, error=str(exc))
+        raise
+    _log(db, article.id, "titles_regen", llm, t0)
+    db.commit()
+    db.refresh(article)
+    return article
+
+
+def regen_body(db: Session, llm, article_id: int) -> Article:
+    article = get_article(db, article_id)
+    t0 = time.time()
+    try:
+        out = gen_body(llm, _current_conflict(article), article.title)
+        article.body = out.body
+        article.mood = out.mood
+    except Exception as exc:
+        _log(db, article.id, "body_regen", llm, t0, ok=False, error=str(exc))
+        raise
+    _log(db, article.id, "body_regen", llm, t0)
+    db.commit()
+    db.refresh(article)
+    return article
+
+
+def regen_images(db: Session, ark, article_id: int, count: int,
+                 storage_root: Path, max_count: int = 3) -> Article:
+    article = get_article(db, article_id)
+    n = min(max(count, 1), max_count)
+    article.image_paths = generate_images(ark, article, n, storage_root)
+    db.commit()
+    db.refresh(article)
     return article
