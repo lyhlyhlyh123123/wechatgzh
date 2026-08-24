@@ -1,6 +1,6 @@
 <script setup>
 import { ref } from 'vue'
-import { Setting } from '@element-plus/icons-vue'
+
 import CreateView from './views/createView.vue'
 import HistoryView from './views/HistoryView.vue'
 import DetailView from './views/DetailView.vue'
@@ -21,8 +21,9 @@ function openDetail(id) {
       <div style="padding:16px;font-weight:600;font-size:14px;border-bottom:1px solid #e4e7ed">情感内容工作台</div>
       <el-menu :default-active="activeMenu" @select="activeMenu=$event" style="flex:1;border-right:none">
         <el-menu-item index="create"><span>创造中心</span></el-menu-item>
+        <el-menu-item index="detail"><span>查看详情</span></el-menu-item>
         <el-menu-item index="history"><span>历史记录</span></el-menu-item>
-        <el-menu-item index="settings"><el-icon><Setting /></el-icon><span>提示词</span></el-menu-item>
+        <el-menu-item index="settings"><span>提示词</span></el-menu-item>
       </el-menu>
     </el-aside>
     <el-main style="padding:0;overflow:hidden;background:#fafafa">
