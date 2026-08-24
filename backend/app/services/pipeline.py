@@ -117,20 +117,22 @@ def regen_images(db: Session, ark, article_id: int, count: int,
 
 
 def one_shot_create(db: Session, llm, ark, storage_root: Path,
-                    default_size: str, max_count: int) -> Article:
+                    default_size: str, max_count: int,
+                    image_count: int = 1,
+                    image_preferences: dict | None = None) -> Article:
     bank_text = read_prompt("question_bank")
     used = [
         q for (q,) in db.query(Article.question_text)
         .filter(Article.question_text != "").distinct().all()
         if q
     ]
-    package = create_package(llm, bank_text, used)
+    package = create_package(llm, bank_text, used, image_preferences)
     data = BuildIn(
         conflict=package.conflict,
         title=package.titles[0],
         candidates=[Candidate(conflict=package.conflict, titles=list(package.titles))],
         image_size=default_size,
-        image_count=1,
+        image_count=image_count,
         image_prompt=package.image_prompt,
         question_text=package.question,
     )

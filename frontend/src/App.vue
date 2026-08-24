@@ -14,7 +14,7 @@ import { FolderOpened, Menu, Setting } from '@element-plus/icons-vue'
         <el-icon><FolderOpened /></el-icon> 本地工作台 v0.1
       </div>
     </el-aside>
-    <el-main style="background:#f7f8fa">
+    <el-main style="background:#f7f8fa;padding:0;overflow:hidden">
       <router-view />
     </el-main>
   </el-container>

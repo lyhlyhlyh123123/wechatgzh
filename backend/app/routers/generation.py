@@ -9,13 +9,16 @@ router = APIRouter(prefix="/api", tags=["generation"])
 
 
 @router.post("/creation/one-shot", response_model=ArticleOut)
-def api_one_shot(request: Request, db: Session = Depends(get_db)):
+def api_one_shot(request: Request, body: dict | None = None,
+                 db: Session = Depends(get_db)):
+    prefs = (body or {}).get("image_preferences") or {}
     try:
         article = pipeline.one_shot_create(
             db, request.app.state.llm, request.app.state.ark,
             storage_root=request.app.state.storage_root,
             default_size=request.app.state.default_size,
             max_count=request.app.state.max_count,
+            image_preferences=prefs,
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc))

@@ -27,7 +27,8 @@ def _package_valid(out: CreatorOut, bank_questions: set[str], used_questions: li
     )
 
 
-def create_package(llm, bank_text: str, used_questions: list[str]) -> CreatorOut:
+def create_package(llm, bank_text: str, used_questions: list[str],
+                   image_preferences: dict | None = None) -> CreatorOut:
     system = read_prompt("creator_system")
     bank_questions = {
         q for section in json.loads(bank_text).get("sections", [])
@@ -35,6 +36,14 @@ def create_package(llm, bank_text: str, used_questions: list[str]) -> CreatorOut
     }
     used_block = "\n".join(used_questions) if used_questions else "（暂无）"
     user = f"【题库】\n{bank_text}\n【已用问题（禁止选择）】\n{used_block}"
+    if image_preferences:
+        prefs_lines = []
+        for k, v in image_preferences.items():
+            if v:
+                prefs_lines.append(f"- {k}：{v}")
+        if prefs_lines:
+            prefs_block = "\n".join(prefs_lines)
+            user = f"【必须严格遵守的人物设定】\n{prefs_block}\n\n{user}"
     out: CreatorOut = _ask(llm, system, user, CreatorOut)
     if not _package_valid(out, bank_questions, used_questions):
         rejected = out.question
