@@ -74,7 +74,7 @@ onMounted(load)
     </div>
 
     <div v-loading="loading">
-      <el-empty v-if="!items.length" description="还没有内容包，点右上角新建" />
+      <el-empty v-if="!items.length" description="还没有内容包，点右上角一键创作" />
       <el-row :gutter="16">
         <el-col v-for="item in items" :key="item.id" :span="6" style="margin-bottom:16px">
           <el-card shadow="hover" :body-style="{ padding: '0px' }">
