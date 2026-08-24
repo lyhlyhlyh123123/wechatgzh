@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from app.schemas import CreatorOut
@@ -14,9 +16,16 @@ class FakeLLM:
         return self.responses.pop(0)
 
 
-BANK = "【自我认知】35岁还没活成自己想要的样子，是我错了吗\n【婚姻】心动和稳定，只能选一个吗"
-Q_USED = "【自我认知】35岁还没活成自己想要的样子，是我错了吗"
-Q_FREE = "【婚姻】心动和稳定，只能选一个吗"
+BANK = json.dumps({"sections": [
+    {"name": "自我认知", "drive_type": "恐惧", "questions": [
+        "35岁还没活成自己想要的样子，是我错了吗",
+    ]},
+    {"name": "婚姻", "drive_type": "欲望", "questions": [
+        "心动和稳定，只能选一个吗",
+    ]},
+]}, ensure_ascii=False)
+Q_USED = "35岁还没活成自己想要的样子，是我错了吗"
+Q_FREE = "心动和稳定，只能选一个吗"
 
 
 def pkg(question):

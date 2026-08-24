@@ -4,7 +4,7 @@ import pytest
 
 from app.models import GenerationLog, Topic
 from app.schemas import BuildIn, Candidate
-from app.services.pipeline import build_article, draft_conflicts, source_text
+from app.services.pipeline import build_article
 
 
 class FakeLLM:
@@ -40,29 +40,7 @@ def topic(test_session):
 def make_llm():
     return FakeLLM([
         {"body": "以前总觉得来日方长，现在只想过好今天。", "mood": "黄昏阳台"},
-        {"image_prompt": "candid photo of a woman at dusk"},
     ])
-
-
-def test_source_text_from_topic(test_session, topic):
-    text = source_text(test_session, topic_id=topic.id)
-    assert "恐惧" in text and "遇不到合适的人" in text
-    assert "自由想法" in source_text(test_session, idea="随便写写")
-
-
-def test_draft_conflicts_logs(test_session, test_engine):
-    from app.database import Base
-
-    Base.metadata.create_all(test_engine)
-    llm = FakeLLM([{"candidates": [
-        {"conflict": "c", "titles": ["t1", "t2", "t3", "t4", "t5"]},
-    ]}])
-    out = draft_conflicts(test_session, llm, idea="x")
-    assert len(out) == 1
-    logs = test_session.query(GenerationLog).all()
-    assert logs[0].stage == "conflict"
-    assert logs[0].ok is True
-    assert logs[0].model == "fake-model"
 
 
 def test_build_article_full_flow(test_session, test_engine, tmp_path, topic):
@@ -76,6 +54,8 @@ def test_build_article_full_flow(test_session, test_engine, tmp_path, topic):
         conflict="心动还是稳定",
         title="35岁，我选了稳定",
         image_count=2,
+        image_prompt="candid photo of a woman at dusk",
+        question_text="35岁还没活成自己想要的样子，是我错了吗",
         candidates=[Candidate(conflict="心动还是稳定", titles=["35岁，我选了稳定"])],
     )
     article = build_article(
@@ -85,17 +65,37 @@ def test_build_article_full_flow(test_session, test_engine, tmp_path, topic):
     )
     assert article.body.startswith("以前总觉得")
     assert article.mood == "黄昏阳台"
-    assert article.image_prompt == "candid photo of a woman at dusk"
     assert len(article.image_paths) == 2
     assert article.image_paths[0].startswith(f"runs/{article.id}/")
     saved = tmp_path / "storage" / article.image_paths[0]
     assert saved.read_bytes() == b"img"
     assert len(ark.calls) == 2
-    assert ark.calls[0][1] == "1080x1620"
+    assert ark.calls[0] == ("candid photo of a woman at dusk", "1080x1620")
     stages = [l.stage for l in test_session.query(GenerationLog).all()]
-    assert stages == ["body", "image_prompt", "image"]
+    assert stages == ["body", "image"]
     assert topic.use_count == 1
     assert article.title_candidates[0]["conflict"] == "心动还是稳定"
+
+
+def test_build_article_consumes_buildin_fields(test_session, test_engine, tmp_path):
+    from app.database import Base
+
+    Base.metadata.create_all(test_engine)
+    data = BuildIn(
+        conflict="心动还是稳定",
+        title="35岁，我选了稳定",
+        image_count=1,
+        image_prompt="直通的人像提示词",
+        question_text="心动和稳定，只能选一个吗",
+    )
+    article = build_article(
+        test_session, make_llm(), FakeArk(), data,
+        storage_root=tmp_path / "storage",
+        default_size="1080x1620", max_count=3,
+    )
+    assert article.image_prompt == "直通的人像提示词"
+    assert article.question_text == "心动和稳定，只能选一个吗"
+    assert [l.stage for l in test_session.query(GenerationLog).all()] == ["body", "image"]
 
 
 def test_build_respects_max_count(test_session, test_engine, tmp_path, topic):

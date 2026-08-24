@@ -1,7 +1,7 @@
 from pathlib import Path
 
 BASE_DIR = Path("templates") / "prompts"
-PROMPT_NAMES = ["creator_system", "body_system", "question_bank", "conflict_system", "image_style"]
+PROMPT_NAMES = ["creator_system", "body_system", "question_bank"]
 _EXTENSIONS = {"question_bank": ".json"}
 
 

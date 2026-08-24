@@ -37,10 +37,6 @@ class Candidate(BaseModel):
     titles: list[str]
 
 
-class ConflictsOut(BaseModel):
-    candidates: list[Candidate]
-
-
 class CreatorOut(BaseModel):
     question: str
     conflict: str
@@ -53,15 +49,6 @@ class CreatorOut(BaseModel):
 class BodyOut(BaseModel):
     body: str
     mood: str
-
-
-class ImagePromptOut(BaseModel):
-    image_prompt: str
-
-
-class DraftConflictsIn(BaseModel):
-    topic_id: int | None = None
-    idea: str = ""
 
 
 class BuildIn(BaseModel):

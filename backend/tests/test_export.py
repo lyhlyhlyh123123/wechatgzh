@@ -1,11 +1,11 @@
 import io
 import zipfile
 
-from tests.test_generation_api import BUILD_BODY, wired
+from tests.test_generation_api import make_article
 
 
-def test_export_zip(client, wired):
-    art = client.post("/api/generation/build", json=BUILD_BODY).json()
+def test_export_zip(client, test_engine):
+    art = make_article(client, test_engine)
     r = client.get(f"/api/articles/{art['id']}/export.zip")
     assert r.status_code == 200
     assert r.headers["content-type"] == "application/zip"

@@ -1,15 +1,13 @@
-import random
 import time
 from datetime import datetime
 from pathlib import Path
 
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models import Article, GenerationLog, Topic
-from app.schemas import BuildIn
-from app.services.stages import draft_conflicts as _stage_conflicts
-from app.services.stages import gen_body, gen_image_prompt
+from app.schemas import BuildIn, Candidate
+from app.services.prompt_store import read_prompt
+from app.services.stages import create_package, gen_body
 
 
 def _model_name(llm) -> str:
@@ -29,29 +27,6 @@ def _log(db: Session, article_id: int | None, stage: str, llm, t0: float,
     db.commit()
 
 
-def source_text(db: Session, topic_id: int | None = None, idea: str = "") -> str:
-    if topic_id:
-        topic = db.get(Topic, topic_id)
-        if not topic:
-            raise ValueError("主题不存在")
-        return f"驱动类型：{topic.drive_type}\n分类：{topic.category}\n素材：{topic.conflict}"
-    if not idea.strip():
-        raise ValueError("必须提供主题或想法")
-    return f"自由想法：{idea.strip()}"
-
-
-def draft_conflicts(db: Session, llm, topic_id: int | None = None, idea: str = "") -> list:
-    text = source_text(db, topic_id, idea)
-    t0 = time.time()
-    try:
-        candidates = _stage_conflicts(llm, text)
-        _log(db, None, "conflict", llm, t0)
-        return candidates
-    except Exception as exc:
-        _log(db, None, "conflict", llm, t0, ok=False, error=str(exc))
-        raise
-
-
 def generate_images(ark, article: Article, count: int, storage_root: Path) -> list[str]:
     folder = Path(storage_root) / "runs" / str(article.id)
     paths = []
@@ -67,6 +42,8 @@ def build_article(db: Session, llm, ark, data: BuildIn, storage_root: Path,
     article = Article(
         topic_id=data.topic_id,
         title=data.title.strip(),
+        image_prompt=data.image_prompt,
+        question_text=data.question_text,
         image_size=data.image_size or default_size,
     )
     if data.candidates:
@@ -86,15 +63,6 @@ def build_article(db: Session, llm, ark, data: BuildIn, storage_root: Path,
     article.body = body_out.body
     article.mood = body_out.mood
     _log(db, article.id, "body", llm, t0)
-    db.commit()
-
-    t0 = time.time()
-    try:
-        article.image_prompt = gen_image_prompt(llm, article.body, article.mood)
-    except Exception as exc:
-        _log(db, article.id, "image_prompt", llm, t0, ok=False, error=str(exc))
-        raise
-    _log(db, article.id, "image_prompt", llm, t0)
     db.commit()
 
     count = min(max(data.image_count or 1, 1), max_count)
@@ -122,39 +90,11 @@ def get_article(db: Session, article_id: int) -> Article:
     return article
 
 
-def _current_conflict(article: Article) -> str:
-    for cand in article.title_candidates or []:
-        if isinstance(cand, dict) and article.title in cand.get("titles", []):
-            return cand.get("conflict", "")
-    first = article.title_candidates[0] if article.title_candidates else {}
-    return first.get("conflict", "") if isinstance(first, dict) else ""
-
-
-def regen_titles(db: Session, llm, article_id: int) -> Article:
-    article = get_article(db, article_id)
-    src = (
-        f"现有标题：{article.title}\n"
-        f"冲突方向：{_current_conflict(article)}\n"
-        f"正文片段：{article.body[:50]}"
-    )
-    t0 = time.time()
-    try:
-        candidates = _stage_conflicts(llm, src)
-        article.title_candidates = [c.model_dump() for c in candidates]
-    except Exception as exc:
-        _log(db, article.id, "titles_regen", llm, t0, ok=False, error=str(exc))
-        raise
-    _log(db, article.id, "titles_regen", llm, t0)
-    db.commit()
-    db.refresh(article)
-    return article
-
-
 def regen_body(db: Session, llm, article_id: int) -> Article:
     article = get_article(db, article_id)
     t0 = time.time()
     try:
-        out = gen_body(llm, _current_conflict(article), article.title)
+        out = gen_body(llm, article.question_text, article.title)
         article.body = out.body
         article.mood = out.mood
     except Exception as exc:
@@ -176,34 +116,25 @@ def regen_images(db: Session, ark, article_id: int, count: int,
     return article
 
 
-def pick_unused_topic(db: Session) -> Topic | None:
-    used_ids = db.query(Article.topic_id).filter(Article.topic_id.isnot(None))
-    return (
-        db.query(Topic)
-        .filter(Topic.enabled.is_(True), ~Topic.id.in_(used_ids))
-        .order_by(func.random())
-        .first()
-    )
-
-
-def auto_generate(db: Session, llm, ark, storage_root: Path,
-                  default_size: str, max_count: int) -> Article:
-    topic = pick_unused_topic(db)
-    if topic is None:
-        raise ValueError("题库中的问题已全部使用")
-    candidates = draft_conflicts(db, llm, topic_id=topic.id)
-    first = candidates[0]
+def one_shot_create(db: Session, llm, ark, storage_root: Path,
+                    default_size: str, max_count: int) -> Article:
+    bank_text = read_prompt("question_bank")
+    used = [
+        q for (q,) in db.query(Article.question_text)
+        .filter(Article.question_text != "").distinct().all()
+        if q
+    ]
+    package = create_package(llm, bank_text, used)
     data = BuildIn(
-        topic_id=topic.id,
-        conflict=first.conflict,
-        title=first.titles[0],
+        conflict=package.conflict,
+        title=package.titles[0],
+        candidates=[Candidate(conflict=package.conflict, titles=list(package.titles))],
         image_size=default_size,
         image_count=1,
-        candidates=candidates,
+        image_prompt=package.image_prompt,
+        question_text=package.question,
     )
-    return build_article(
-        db, llm, ark, data,
-        storage_root=storage_root,
-        default_size=default_size,
-        max_count=max_count,
-    )
+    return build_article(db, llm, ark, data,
+                         storage_root=storage_root,
+                         default_size=default_size,
+                         max_count=max_count)

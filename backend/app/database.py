@@ -1,7 +1,7 @@
 from collections.abc import Iterator
 from pathlib import Path
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 Path("data").mkdir(parents=True, exist_ok=True)
@@ -10,6 +10,12 @@ engine = create_engine(
     "sqlite:///data/app.db",
     connect_args={"check_same_thread": False},
 )
+
+with engine.connect() as conn:
+    cols = {row[1] for row in conn.execute(text("PRAGMA table_info(articles)"))}
+    if cols and "question_text" not in cols:
+        conn.execute(text("ALTER TABLE articles ADD COLUMN question_text TEXT DEFAULT ''"))
+        conn.commit()
 SessionLocal = sessionmaker(bind=engine, autoflush=False)
 
 
