@@ -52,15 +52,7 @@ async function regen(kind, payload) {
       ;({ data } = await api.post(url))
     }
     article.value = data
-    if (kind === 'titles') {
-      const flat = []
-      for (const c of data.title_candidates || []) {
-        for (const t of c.titles || []) flat.push({ conflict: c.conflict, title: t })
-      }
-      candidates.value = flat.filter((x) => x.title !== data.title)
-      pickedTitle.value = ''
-      ElMessage.success('已生成新候选，挑选后点击「采用」')
-    } else if (kind === 'body') {
+    if (kind === 'body') {
       edit.value.body = data.body
     }
   } catch {
@@ -147,7 +139,6 @@ onMounted(load)
               <el-option v-for="c in candidates" :key="c.title" :label="`${c.title}（${c.conflict}）`" :value="c.title" />
             </el-select>
             <el-button @click="adoptTitle">采用</el-button>
-            <el-button :loading="busy === 'titles'" @click="regen('titles')">重出候选</el-button>
             <el-button type="primary" :loading="busy === 'save_title'" @click="saveField('title')">保存标题</el-button>
           </div>
         </el-card>

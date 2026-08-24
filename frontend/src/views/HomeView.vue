@@ -43,22 +43,16 @@ async function remove(item) {
   load()
 }
 
-async function autoGenerate() {
+const creating = ref(false)
+
+async function createOne() {
+  creating.value = true
   try {
-    const { value } = await ElMessageBox.prompt('本次让 AI 自动生成几篇？（1–5）', 'AI 全自动', {
-      inputValue: '1',
-      inputPattern: /^[1-5]$/,
-      inputErrorMessage: '请输入 1 到 5 的数字',
-      confirmButtonText: '开始生成',
-    })
-    loading.value = true
-    const { data } = await api.post('/generation/auto', null, { params: { count: Number(value) } })
-    ElMessage.success(`已生成 ${data.articles.length} 篇，请到列表逐篇审核`)
-    load()
-  } catch (err) {
-    if (err !== 'cancel' && err?.message !== 'cancel') load()
+    const resp = await api.post('/creation/one-shot')
+    ElMessage.success('已生成，请审查')
+    router.push(`/articles/${resp.data.id}`)
   } finally {
-    loading.value = false
+    creating.value = false
   }
 }
 
@@ -76,8 +70,7 @@ onMounted(load)
       <el-input v-model="q" placeholder="搜索标题" clearable style="width:220px" @keyup.enter="page=1;load()" @clear="load()" />
       <el-button type="primary" @click="page=1;load()">搜索</el-button>
       <div style="flex:1"></div>
-      <el-button type="primary" @click="router.push('/wizard')">新建内容</el-button>
-      <el-button type="success" @click="autoGenerate">AI 全自动</el-button>
+      <el-button type="primary" :loading="creating" @click="createOne">一键创作</el-button>
     </div>
 
     <div v-loading="loading">

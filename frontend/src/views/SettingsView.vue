@@ -4,9 +4,8 @@ import { onMounted, reactive, ref } from 'vue'
 import { api } from '../api'
 
 const PROMPTS = [
-  { name: 'conflict_system', label: '冲突与标题' },
-  { name: 'body_system', label: '正文' },
-  { name: 'image_style', label: '图片风格' },
+  { name: 'creator_system', label: '创意总监提示词' },
+  { name: 'question_bank', label: '问题库（100问）' },
 ]
 
 const s = reactive({
@@ -21,7 +20,7 @@ const s = reactive({
   api_ready: false,
 })
 const keys = reactive({ deepseek_api_key: '', volcengine_ark_api_key: '' })
-const promptName = ref('body_system')
+const promptName = ref('creator_system')
 const promptContent = ref('')
 const savingCfg = ref(false)
 const savingPrompt = ref(false)
