@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     image_count_default: int = 1
     image_count_max: int = 3
     host: str = "127.0.0.1"
-    port: int = 8000
+    port: int = 8787
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

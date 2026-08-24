@@ -1,2 +1,5 @@
 node_modules/
 frontend/dist/
+backend/build/
+backend/dist/
+backend/GzhWorkbench.spec

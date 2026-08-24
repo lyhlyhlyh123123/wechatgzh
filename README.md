@@ -30,7 +30,20 @@ AI 驱动的微信公众号情感图文内容生产系统：一键生成「冲�
 生产模式（单端口）：
 - 先执行 `cd frontend; npm run build`
 - 再运行 `.\start_backend.ps1`
-- 访问 http://127.0.0.1:8000
+- 访问 http://127.0.0.1:8787
+
+## 一键启动 EXE
+
+```powershell
+.\build_exe.ps1
+```
+
+产物：`backend\dist\GzhWorkbench\GzhWorkbench.exe`（文件夹版）。
+
+- 双击运行：自动启动服务并打开浏览器（端口 8787）
+- 数据全部保存在 exe 同级目录：`data\`(SQLite)、`storage\`(图片)、`templates\prompts\`(可编辑提示词)、`.env`(配置)
+- 首次运行会自动释放内置模板与页面；把整个 GzhWorkbench 文件夹压缩后即可分发
+- API Key 建议直接在工作台设置页填写，会写入 exe 同级的 `.env`
 
 说明：测试套件运行时会自动设置 `WECHATGZH_AUTO_CREATE=0`，该环境变量仅对 pytest 生效；日常用 uvicorn 启动无需任何额外操作。
 
