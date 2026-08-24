@@ -2,6 +2,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import sessionmaker
 
@@ -59,9 +60,19 @@ def create_app(session_factory: sessionmaker | None = None, llm=None, ark=None,
     app.include_router(prompts_api.router)
     app.include_router(settings_api.router)
 
+    storage_dir = Path(storage_root)
+    storage_dir.mkdir(exist_ok=True)
+    app.mount("/files", StaticFiles(directory=str(storage_dir)), name="files")
+
     static_dir = Path("static")
     if (static_dir / "index.html").exists():
-        app.mount("/", StaticFiles(html=True), name="spa")
+
+        @app.get("/{full_path:path}", include_in_schema=False)
+        def spa_fallback(full_path: str):
+            target = static_dir / full_path
+            if full_path and target.is_file():
+                return FileResponse(target)
+            return FileResponse(static_dir / "index.html")
     return app
 
 
