@@ -235,3 +235,32 @@ STORAGE_DIR=storage/runs
    - 数据持久化在 exe 同级：data/(SQLite)、storage/(图片)、templates/prompts/(可编辑提示词)、.env
    - 分发方式：整个 GzhWorkbench 文件夹打包发送
 
+## 十五、v2 重构：创意总监模式（2026-08-23 追加）
+
+用户澄清核心愿景：问题库是给大模型看的「技能材料」，全部创意决策由模型完成；人只点一个按钮、最后审稿。原 SQL 抽题 + 分环节模板的模式偏离此愿景，重构如下。
+
+### 核心流程
+
+```
+首页「一键创作」→ POST /api/creation/one-shot（每次1篇）
+1. 组装材料：question_bank.json 全文注入 + 已用问题清单
+2. 一次 DeepSeek 大调用（creator_system.txt = 模型的运行时技能）：
+   自选未用问题 → 冲突角度 → 3个标题候选 → 30–60字第一人称正文 → 情绪标签 → 完整英文摄影提示词
+3. 硬校验：所选问题必须在库内且未被占用；违规带纠偏信息重试一次，仍违规报错
+4. ARK 生图 = 模型提示词原文 + 固定真实感摄影兜底后缀（自然光/胶片质感），1张
+5. 入库 status=draft（含 question_text 占用标记）→ 前端直接跳详情页人工审查
+```
+
+### 取舍清单
+
+| 处置 | 对象 |
+|---|---|
+| 删除 | 三步向导页、主题库管理页、「新建内容」菜单、`draft-conflicts`/`build`/`auto` 端点、`regen-titles` 端点及按钮、conflict_system/image_style 模板、SQL 抽题逻辑 |
+| 新增 | `creator_system.txt` 技能提示词、`POST /api/creation/one-shot`、Article.question_text 占用字段、BuildIn.image_prompt 直通 |
+| 保留 | 首页列表、详情工作页（编辑/重写正文/重新生图/状态/导出）、设置页（提示词编辑改为：创意总监提示词 + 问题库100问 两项）、gen_body（服务重写正文） |
+| 调整 | question_bank.json 移入 templates/prompts/ 由白名单读写管理；seed 回退为 12 条种子不再注入题库 |
+
+### 去重规则
+
+用过即占用：question_text 非空的文章存在期间该问题不可再选；删除文章释放；发布过的天然永不重复。每次创作把已用清单传给模型令其避开，代码层硬校验兜底。
+

@@ -4188,6 +4188,36 @@ git commit -m "feat: 首页AI全自动入口与验收增补"
 2. **默认图片数量接线（Task 7/9 补充）**：`create_app` 增加 `app.state.default_count = settings.image_count_default`；`api_build` 在 pipeline 调用前对 `data.image_count is None` 回填 default_count；`api_regen_images` 的 count 缺省回填 default_count；WizardView onMounted 预读 `/api/settings` 的 image_count_default；`put_settings` 同步刷新 `state.default_count`。配套测试 `test_build_and_regen_use_default_count` 与 `test_get_and_put_settings` 断言。
 3. **storage 目录创建**：使用 `mkdir(parents=True, exist_ok=True)`。
 
+## v2 计划：创意总监模式（Task 19–22）
+
+设计见 spec 十五章。约束补充：BuildIn 新增 `image_prompt:str=""` 与 `question_text:str=""`；Article 新增 question_text 列；PROMPT_NAMES 变更为 `[creator_system, question_bank]`；build_article 不再调用图片提示词生成（image_prompt 由 BuildIn 直通），LLM 消耗从 3 次/篇降为 body 1 次（one-shot 全程 2 次）；gen_body 仅服务 regen-body；regen-titles/draft-conflicts/build/auto 端点删除。
+
+### Task 19: creator 阶段与数据字段（后端）
+
+Files: schemas.py、models.py(Article.question_text)、services/stages.py(删 draft_conflicts/gen_image_prompt，增 create_package)、services/prompt_store.py(PROMPT_NAMES)、templates/prompts/{creator_system.txt 新增, question_bank.json 移入, conflict_system/image_style 删除}、seed.py(回退纯12条)、tests(test_stages 重写、test_topics 调整)
+Interfaces: `create_package(llm, bank_text, used_questions) -> CreatorOut`（占用校验+一次纠偏重试，失败 ValueError）；CreatorOut{question,conflict,titles[3],body,mood,image_prompt}
+
+creator_system.txt 内容要点（完整文本实现时写入）：角色=公众号情感内容创意总监；输入=100问清单+已用清单；规则=只选未用问题、标题12~22字公式化、正文30–60字真人口吻留白、mood 2–6字画面标签、英文提示词60词内真实感手机摄影（成熟知性中国女性/自然光/生活感/负面：明星脸网红脸影楼二次元）；输出 JSON {"question","conflict","titles"[3],"body","mood","image_prompt"}
+
+Steps: 失败测试先行 → 实现 → suite 绿 → commit `feat: 创意总监阶段与问题字段`
+
+### Task 20: one-shot 端点与管线改造（后端）
+
+Files: services/pipeline.py(BuildIn.image_prompt/question_text 消费、one_shot_create 增、auto_generate/pick_unused_topic/_current_conflict 中 titles 相关调整、regen_titles 删)、routers/generation.py(端点增删)、tests(test_creation_api.py 新、test_auto_api/test_generation_api/test_articles_api/test_export/test_pipeline 同步)
+Interfaces: `POST /api/creation/one-shot` → ArticleOut（ValueError→400「题库已全部使用或纠偏失败」类文案，其余→502）；`one_shot_create(db,llm,ark,storage_root,default_size,max_count)`；build_article 的 title_candidates 兼容结构 [{"conflict":角度,"titles":[...]}] 不变
+Steps: TDD → suite 绿 → commit `feat: 一键创作one-shot端点`
+
+### Task 21: 前端收敛
+
+Files: HomeView(一键创作直跳详情)、App.vue(菜单仅 内容包/设置)、router.js(删 /wizard /topics)、删除 WizardView.vue TopicsView.vue、SettingsView(tabs→创意总监提示词/问题库)、DetailView(删重出候选块)
+Steps: 改造 → npm build 验证并清理 backend/static → commit `feat: 前端收敛为一键创作模式`
+
+### Task 22: 文档与回归
+
+README 使用流程重写（一键创作语义）、spec/plan 已由控制器同步；全量 pytest + npm build + 单端口冒烟（8787）→ commit `docs: v2创意总监模式文档与回归`
+
+---
+
 ## 计划完成定义
 
 以上 17 个任务全部完成并通过验收清单，即达成第一期 MVP（含 v1.1 全自动选题）：本地可视化工作台完成「AI 自动选题→成稿→配图→人工审核→导出」闭环，已使用的问题不重复。后续迭代方向（不在本计划内）：公众号草稿箱 API 对接、数据反馈系统。
