@@ -30,6 +30,7 @@ class Article(Base):
     image_prompt: Mapped[str] = mapped_column(Text, default="")
     image_paths: Mapped[list] = mapped_column(JSON, default=list)
     image_size: Mapped[str] = mapped_column(String(20), default="1080x1620")
+    image_preferences: Mapped[dict] = mapped_column(JSON, default=dict)
     status: Mapped[str] = mapped_column(String(20), default="draft")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now, onupdate=datetime.now)

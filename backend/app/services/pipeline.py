@@ -136,7 +136,12 @@ def one_shot_create(db: Session, llm, ark, storage_root: Path,
         image_prompt=package.image_prompt,
         question_text=package.question,
     )
-    return build_article(db, llm, ark, data,
-                         storage_root=storage_root,
-                         default_size=default_size,
-                         max_count=max_count)
+    article = build_article(db, llm, ark, data,
+                            storage_root=storage_root,
+                            default_size=default_size,
+                            max_count=max_count)
+    if image_preferences:
+        article.image_preferences = image_preferences
+        db.commit()
+        db.refresh(article)
+    return article

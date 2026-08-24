@@ -36,6 +36,17 @@ def create_app(session_factory: sessionmaker | None = None, llm=None, ark=None,
 
     eng = db_engine or engine
     Base.metadata.create_all(eng)
+
+    with eng.connect() as conn:
+        cols = {r[1] for r in conn.execute(
+            __import__('sqlalchemy').text("PRAGMA table_info(articles)")
+        ).fetchall()}
+        if "image_preferences" not in cols:
+            conn.execute(__import__('sqlalchemy').text(
+                "ALTER TABLE articles ADD COLUMN image_preferences JSON NOT NULL DEFAULT '{}'"
+            ))
+            conn.commit()
+
     SF = session_factory or SessionLocal
     with SF() as db:
         ensure_seed(db)

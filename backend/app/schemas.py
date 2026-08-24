@@ -85,6 +85,7 @@ class ArticleOut(BaseModel):
     image_prompt: str
     image_paths: list
     image_size: str
+    image_preferences: dict = {}
     status: str
     created_at: datetime
     updated_at: datetime

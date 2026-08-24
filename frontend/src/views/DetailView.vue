@@ -125,6 +125,14 @@ onMounted(load)
       <el-tag size="small">{{ article.mood }}</el-tag>
     </div>
 
+    <!-- 人物设定 -->
+    <div v-if="article.image_preferences && Object.keys(article.image_preferences).length" style="background:#fff;border-radius:8px;padding:14px;margin-bottom:10px;border:1px solid #ebeef5">
+      <div style="font-size:12px;color:#909399;margin-bottom:6px">人物设定</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px">
+        <el-tag v-for="(v,k) in article.image_preferences" :key="k" size="small" type="info">{{ k }}：{{ v }}</el-tag>
+      </div>
+    </div>
+
     <!-- 图片提示词 -->
     <div style="background:#fff;border-radius:8px;padding:14px;margin-bottom:10px;border:1px solid #ebeef5">
       <div style="font-size:12px;color:#909399;margin-bottom:6px">图片提示词</div>
