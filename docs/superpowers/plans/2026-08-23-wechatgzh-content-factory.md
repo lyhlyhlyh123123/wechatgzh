@@ -4169,6 +4169,25 @@ git commit -m "feat: 首页AI全自动入口与验收增补"
 
 ---
 
+## v1.2 终审修订（实现与上文任务文本的差异，以本节为准）
+
+终审发现并已修复三处计划文本自带缺陷，后续重跑计划时按此覆盖：
+
+1. **SPA 兜底路径遍历（Task 14 代码修正）**：`spa_fallback` 必须做锚定校验，否则 `/%2e%2e%2f.env` 会泄露明文密钥：
+
+```python
+    @app.get("/{full_path:path}", include_in_schema=False)
+    def spa_fallback(full_path: str):
+        static_root = Path("static").resolve()
+        target = (static_root / full_path).resolve()
+        if full_path and target.is_file() and target.is_relative_to(static_root):
+            return FileResponse(target)
+        return FileResponse(static_root / "index.html")
+```
+
+2. **默认图片数量接线（Task 7/9 补充）**：`create_app` 增加 `app.state.default_count = settings.image_count_default`；`api_build` 在 pipeline 调用前对 `data.image_count is None` 回填 default_count；`api_regen_images` 的 count 缺省回填 default_count；WizardView onMounted 预读 `/api/settings` 的 image_count_default；`put_settings` 同步刷新 `state.default_count`。配套测试 `test_build_and_regen_use_default_count` 与 `test_get_and_put_settings` 断言。
+3. **storage 目录创建**：使用 `mkdir(parents=True, exist_ok=True)`。
+
 ## 计划完成定义
 
 以上 17 个任务全部完成并通过验收清单，即达成第一期 MVP（含 v1.1 全自动选题）：本地可视化工作台完成「AI 自动选题→成稿→配图→人工审核→导出」闭环，已使用的问题不重复。后续迭代方向（不在本计划内）：公众号草稿箱 API 对接、数据反馈系统。
