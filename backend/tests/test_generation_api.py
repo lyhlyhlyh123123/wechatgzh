@@ -60,3 +60,16 @@ def test_draft_conflicts_endpoint(wired):
     ]})
     r = client.post("/api/generation/draft-conflicts", json={"idea": "大龄单身"})
     assert r.json()["candidates"][0]["conflict"] == "c1"
+
+
+def test_build_and_regen_use_default_count(client, wired):
+    client.app.state.default_count = 2
+    art = client.post("/api/generation/build", json={
+        "topic_id": None,
+        "conflict": "c",
+        "title": "默认数量标题",
+    }).json()
+    assert len(art["image_paths"]) == 2
+
+    r = client.post(f"/api/articles/{art['id']}/regen-images")
+    assert len(r.json()["image_paths"]) == 2

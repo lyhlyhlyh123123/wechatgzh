@@ -22,6 +22,8 @@ def api_draft_conflicts(data: DraftConflictsIn, request: Request, db: Session = 
 
 @router.post("/generation/build", response_model=ArticleOut)
 def api_build(data: BuildIn, request: Request, db: Session = Depends(get_db)):
+    if data.image_count is None:
+        data.image_count = request.app.state.default_count
     try:
         article = pipeline.build_article(
             db, request.app.state.llm, request.app.state.ark, data,
@@ -59,7 +61,7 @@ def api_regen_body(article_id: int, request: Request, db: Session = Depends(get_
 @router.post("/articles/{article_id}/regen-images", response_model=ArticleOut)
 def api_regen_images(article_id: int, request: Request, body: dict | None = None,
                      db: Session = Depends(get_db)):
-    count = (body or {}).get("count") or 1
+    count = (body or {}).get("count") or request.app.state.default_count
     try:
         return pipeline.regen_images(
             db, request.app.state.ark, article_id, count,

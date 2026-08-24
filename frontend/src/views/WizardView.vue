@@ -18,13 +18,15 @@ const currentCandidate = computed(() => candidates.value[sel.c] || null)
 const currentTitle = computed(() => currentCandidate.value?.titles[sel.t] || '')
 
 onMounted(async () => {
-  const [t, p] = await Promise.all([
+  const [t, p, s] = await Promise.all([
     api.get('/topics', { params: { enabled: true } }),
     api.get('/presets'),
+    api.get('/settings'),
   ])
   topics.value = t.data.items
   presets.value = p.data
   form.size = p.data[0]?.size || '1080x1620'
+  form.count = s.data.image_count_default || 1
 })
 
 async function draft() {

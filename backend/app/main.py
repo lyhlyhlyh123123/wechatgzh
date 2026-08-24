@@ -52,6 +52,7 @@ def create_app(session_factory: sessionmaker | None = None, llm=None, ark=None,
     )
     app.state.storage_root = storage_root
     app.state.default_size = settings.image_size_default
+    app.state.default_count = settings.image_count_default
     app.state.max_count = settings.image_count_max
 
     app.include_router(topics.router)
@@ -61,7 +62,7 @@ def create_app(session_factory: sessionmaker | None = None, llm=None, ark=None,
     app.include_router(settings_api.router)
 
     storage_dir = Path(storage_root)
-    storage_dir.mkdir(exist_ok=True)
+    storage_dir.mkdir(parents=True, exist_ok=True)
     app.mount("/files", StaticFiles(directory=str(storage_dir)), name="files")
 
     static_dir = Path("static")
@@ -69,10 +70,11 @@ def create_app(session_factory: sessionmaker | None = None, llm=None, ark=None,
 
         @app.get("/{full_path:path}", include_in_schema=False)
         def spa_fallback(full_path: str):
-            target = static_dir / full_path
-            if full_path and target.is_file():
+            static_root = Path("static").resolve()
+            target = (static_root / full_path).resolve()
+            if full_path and target.is_file() and target.is_relative_to(static_root):
                 return FileResponse(target)
-            return FileResponse(static_dir / "index.html")
+            return FileResponse(static_root / "index.html")
     return app
 
 
