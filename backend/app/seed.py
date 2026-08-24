@@ -1,3 +1,6 @@
+import json
+from pathlib import Path
+
 from sqlalchemy.orm import Session
 
 from app.models import Topic
@@ -17,10 +20,28 @@ SEED_TOPICS = [
     ("恐惧", "成年人的现实", "存款和安全感，到底哪个先来"),
 ]
 
+BANK_PATH = Path("templates") / "question_bank.json"
+
+
+def _bank_rows() -> list[tuple[str, str, str]]:
+    if not BANK_PATH.exists():
+        return []
+    data = json.loads(BANK_PATH.read_text(encoding="utf-8"))
+    rows = []
+    for section in data.get("sections", []):
+        for question in section.get("questions", []):
+            rows.append((section["drive_type"], section["name"], question))
+    return rows
+
 
 def ensure_seed(session: Session) -> None:
-    if session.query(Topic).count() > 0:
-        return
-    for drive_type, category, conflict in SEED_TOPICS:
+    existing = {c for (c,) in session.query(Topic.conflict).all()}
+    added = False
+    for drive_type, category, conflict in [*SEED_TOPICS, *_bank_rows()]:
+        if conflict in existing:
+            continue
         session.add(Topic(drive_type=drive_type, category=category, conflict=conflict))
-    session.commit()
+        existing.add(conflict)
+        added = True
+    if added:
+        session.commit()

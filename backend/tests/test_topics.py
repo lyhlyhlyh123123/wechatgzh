@@ -10,7 +10,10 @@ def test_seed_visible_via_api(client):
 def test_seed_idempotent(test_session):
     ensure_seed(test_session)
     ensure_seed(test_session)
-    assert test_session.query(Topic).count() >= 10
+    total = test_session.query(Topic).count()
+    assert total >= 100
+    conflicts = [c for (c,) in test_session.query(Topic.conflict).all()]
+    assert len(conflicts) == len(set(conflicts))
 
 
 def test_topic_crud(client):
