@@ -27,10 +27,10 @@ function openDetail(id) {
       </el-menu>
     </el-aside>
     <el-main style="padding:0;overflow:hidden;background:#fafafa">
-      <CreateView v-if="activeMenu==='create'" @created="openDetail" />
-      <HistoryView v-else-if="activeMenu==='history'" @select="openDetail" />
-      <DetailView v-else-if="activeMenu==='detail'" :article-id="selectedArticleId" />
-      <SettingsView v-else-if="activeMenu==='settings'" />
+      <CreateView v-show="activeMenu==='create'" @created="openDetail" />
+      <HistoryView v-show="activeMenu==='history'" @select="openDetail" />
+      <DetailView v-show="activeMenu==='detail'" :article-id="selectedArticleId" />
+      <SettingsView v-show="activeMenu==='settings'" />
     </el-main>
   </el-container>
 </template>
