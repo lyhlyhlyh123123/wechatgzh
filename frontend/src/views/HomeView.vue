@@ -138,7 +138,7 @@ onMounted(load)
 </script>
 
 <template>
-  <div style="display:flex;height:calc(100vh - 60px);gap:0">
+  <div style="display:flex;height:100%;gap:0">
     <!-- 左侧：历史记录 -->
     <div style="width:320px;border-right:1px solid #e4e7ed;display:flex;flex-direction:column;flex-shrink:0">
       <div style="padding:12px;border-bottom:1px solid #e4e7ed">
