@@ -28,6 +28,7 @@ def test_get_and_put_settings(client, tmp_path, monkeypatch):
     })
     assert r.status_code == 200
     assert client.app.state.max_count == 3
+    assert client.app.state.default_count == 2
 
 
 def test_presets_endpoint(client):

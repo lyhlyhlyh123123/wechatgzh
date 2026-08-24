@@ -68,6 +68,7 @@ def put_settings(data: SettingsIn, request: Request):
         write_env(env_updates, path=ENV_PATH)
     request.app.state.default_size = cfg.image_size_default
     request.app.state.max_count = cfg.image_count_max
+    request.app.state.default_count = cfg.image_count_default
     if cfg.deepseek_api_key and cfg.deepseek_model:
         from app.clients.deepseek import DeepSeekClient
 
