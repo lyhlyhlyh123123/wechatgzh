@@ -3961,14 +3961,17 @@ def test_auto_creates_distinct_articles(client):
     assert all(a["title"] == "自动标题一" for a in body["articles"])
 
 
-def test_auto_exhaustion(test_engine, tmp_path):
+def test_auto_exhaustion(test_engine, tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
 
+    from app import seed as seed_mod
     from app.database import Base
     from app.main import create_app
     from app.models import Topic
     from app.services.pipeline import auto_generate
 
+    monkeypatch.setattr(seed_mod, "SEED_TOPICS", [])
+    monkeypatch.setattr(seed_mod, "BANK_PATH", tmp_path / "missing_bank.json")
     Base.metadata.create_all(test_engine)
     Session = sessionmaker(bind=test_engine, autoflush=False)
     create_app(
@@ -3995,7 +3998,7 @@ def test_auto_exhaustion(test_engine, tmp_path):
     db.close()
 ```
 
-说明：每生成一篇消耗 3 条 LLM 响应，`bank_llm(n)` 按 n 篇预置；`test_auto_exhaustion` 用单主题小库确定性验证去重与耗尽报错。
+说明：每生成一篇消耗 3 条 LLM 响应，`bank_llm(n)` 按 n 篇预置。`test_auto_exhaustion` 必须用 monkeypatch 清空种子源（`SEED_TOPICS=[]`、`BANK_PATH` 指向不存在文件），否则 `create_app` 会种子化 112 个主题导致永远无法耗尽——这是对初版计划的修正。
 
 - [ ] **Step 2: 运行测试确认失败**
 
