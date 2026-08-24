@@ -36,7 +36,6 @@ def test_auto_exhaustion(test_engine, tmp_path, monkeypatch):
     from app.services.pipeline import auto_generate
 
     monkeypatch.setattr(seed_mod, "SEED_TOPICS", [])
-    monkeypatch.setattr(seed_mod, "BANK_PATH", tmp_path / "missing_bank.json")
     Base.metadata.create_all(test_engine)
     Session = sessionmaker(bind=test_engine, autoflush=False)
     create_app(

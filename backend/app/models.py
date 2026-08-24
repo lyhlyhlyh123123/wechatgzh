@@ -24,6 +24,7 @@ class Article(Base):
     topic_id: Mapped[int | None] = mapped_column(ForeignKey("topics.id"), nullable=True)
     title: Mapped[str] = mapped_column(String(200))
     title_candidates: Mapped[list] = mapped_column(JSON, default=list)
+    question_text: Mapped[str] = mapped_column(Text, default="")
     body: Mapped[str] = mapped_column(Text, default="")
     mood: Mapped[str] = mapped_column(String(50), default="")
     image_prompt: Mapped[str] = mapped_column(Text, default="")

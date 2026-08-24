@@ -41,6 +41,15 @@ class ConflictsOut(BaseModel):
     candidates: list[Candidate]
 
 
+class CreatorOut(BaseModel):
+    question: str
+    conflict: str
+    titles: list[str] = Field(min_length=3, max_length=3)
+    body: str
+    mood: str
+    image_prompt: str
+
+
 class BodyOut(BaseModel):
     body: str
     mood: str
@@ -62,6 +71,8 @@ class BuildIn(BaseModel):
     image_size: str | None = None
     image_count: int | None = None
     candidates: list[Candidate] | None = None
+    image_prompt: str = ""
+    question_text: str = ""
 
 
 class ArticlePatch(BaseModel):

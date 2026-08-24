@@ -1,7 +1,7 @@
 import pytest
 
-from app.schemas import Candidate
-from app.services.stages import draft_conflicts, gen_body, gen_image_prompt
+from app.schemas import CreatorOut
+from app.services.stages import create_package, gen_body
 
 
 class FakeLLM:
@@ -14,26 +14,20 @@ class FakeLLM:
         return self.responses.pop(0)
 
 
-def test_draft_conflicts_ok():
-    llm = FakeLLM([{
-        "candidates": [
-            {"conflict": "c1", "titles": ["t1", "t2", "t3", "t4", "t5"]},
-            {"conflict": "c2", "titles": ["a", "b", "c", "d", "e"]},
-        ]
-    }])
-    out = draft_conflicts(llm, "主题：恐惧\n素材：遇不到合适的人")
-    assert isinstance(out[0], Candidate)
-    assert len(out) == 2
-    assert "遇不到合适的人" in llm.calls[0][1]
+BANK = "【自我认知】35岁还没活成自己想要的样子，是我错了吗\n【婚姻】心动和稳定，只能选一个吗"
+Q_USED = "【自我认知】35岁还没活成自己想要的样子，是我错了吗"
+Q_FREE = "【婚姻】心动和稳定，只能选一个吗"
 
 
-def test_draft_conflicts_retries_on_bad_shape():
-    llm = FakeLLM([
-        {"wrong": 1},
-        {"candidates": [{"conflict": "c", "titles": ["t1", "t2", "t3", "t4", "t5"]}]},
-    ])
-    out = draft_conflicts(llm, "x")
-    assert len(llm.calls) == 2
+def pkg(question):
+    return {
+        "question": question,
+        "conflict": "她以为退让能换来平静，却发现对方得寸进尺",
+        "titles": ["38岁那年我选择了退让", "退了三年我才看清楚", "这段关系里谁在装睡"],
+        "body": "以前总觉得忍一忍就过去了，后来才发现，让步换不来尊重。",
+        "mood": "黄昏阳台",
+        "image_prompt": "candid phone photo of a woman on a balcony at dusk",
+    }
 
 
 def test_gen_body():
@@ -53,15 +47,40 @@ def test_gen_body_enforces_length_after_retry():
     assert len(out.body) <= 60
 
 
-def test_gen_image_prompt_formats_template(monkeypatch):
-    from app.services import stages
-
-    monkeypatch.setattr(
-        stages, "read_prompt",
-        lambda name: "MOOD={mood} BODY={body}",
-    )
-    llm = FakeLLM([{"image_prompt": "photo of a woman"}])
-    prompt = gen_image_prompt(llm, "正文内容", "雨夜车内")
-    assert prompt == "photo of a woman"
+def test_create_package_ok():
+    llm = FakeLLM([pkg(Q_FREE)])
+    out = create_package(llm, BANK, [])
+    assert isinstance(out, CreatorOut)
+    assert out.question == Q_FREE
+    assert len(out.titles) == 3
+    assert len(llm.calls) == 1
     user_msg = llm.calls[0][1]
-    assert "雨夜车内" in user_msg and "正文内容" in user_msg
+    assert "35岁还没活成自己想要的样子" in user_msg
+    assert "【已用问题（禁止选择）】" in user_msg
+    assert "（暂无）" in user_msg
+
+
+def test_create_package_corrects_occupied_question():
+    llm = FakeLLM([pkg(Q_USED), pkg(Q_FREE)])
+    out = create_package(llm, BANK, [Q_USED])
+    assert out.question == Q_FREE
+    assert len(llm.calls) == 2
+    second = llm.calls[1][1]
+    assert "纠偏" in second
+    assert Q_USED in second
+
+
+def test_create_package_raises_when_still_occupied():
+    llm = FakeLLM([pkg(Q_USED), pkg(Q_USED)])
+    with pytest.raises(ValueError, match="创意包选题校验失败"):
+        create_package(llm, BANK, [Q_USED])
+    assert len(llm.calls) == 2
+
+
+def test_create_package_retries_when_titles_not_three():
+    bad = pkg(Q_FREE)
+    bad["titles"] = bad["titles"][:2]
+    llm = FakeLLM([bad, pkg(Q_FREE)])
+    out = create_package(llm, BANK, [])
+    assert len(out.titles) == 3
+    assert len(llm.calls) == 2

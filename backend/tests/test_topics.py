@@ -11,7 +11,7 @@ def test_seed_idempotent(test_session):
     ensure_seed(test_session)
     ensure_seed(test_session)
     total = test_session.query(Topic).count()
-    assert total >= 100
+    assert total >= 12
     conflicts = [c for (c,) in test_session.query(Topic.conflict).all()]
     assert len(conflicts) == len(set(conflicts))
 

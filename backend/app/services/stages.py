@@ -2,7 +2,7 @@ import json
 
 from pydantic import ValidationError
 
-from app.schemas import BodyOut, ConflictsOut, ImagePromptOut
+from app.schemas import BodyOut, ConflictsOut, CreatorOut, ImagePromptOut
 from app.services.prompt_store import read_prompt
 
 MAX_ATTEMPTS = 3
@@ -17,6 +17,28 @@ def _ask(llm, system: str, user: str, schema):
         except ValidationError as exc:
             last_err = exc
     raise ValueError(f"输出不符合约定结构: {last_err}")
+
+
+def _package_valid(out: CreatorOut, bank_text: str, used_questions: list[str]) -> bool:
+    return (
+        out.question in bank_text
+        and out.question not in used_questions
+        and len(out.titles) == 3
+    )
+
+
+def create_package(llm, bank_text: str, used_questions: list[str]) -> CreatorOut:
+    system = read_prompt("creator_system")
+    used_block = "\n".join(used_questions) if used_questions else "（暂无）"
+    user = f"【题库】\n{bank_text}\n【已用问题（禁止选择）】\n{used_block}"
+    out: CreatorOut = _ask(llm, system, user, CreatorOut)
+    if not _package_valid(out, bank_text, used_questions):
+        rejected = out.question
+        user = f"{user}\n【纠偏】问题“{rejected}”不在库中或已被占用，请另选未占用的问题并按原格式重新输出"
+        out = _ask(llm, system, user, CreatorOut)
+    if not _package_valid(out, bank_text, used_questions):
+        raise ValueError("创意包选题校验失败：问题不在库中或已被占用")
+    return out
 
 
 def draft_conflicts(llm, source_text: str) -> list:
