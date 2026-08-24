@@ -8,7 +8,7 @@ const router = useRouter()
 const items = ref([])
 const total = ref(0)
 const page = ref(1)
-const status = ref('')
+const status = ref('all')
 const q = ref('')
 const loading = ref(false)
 
@@ -20,7 +20,7 @@ async function load() {
   try {
     const { data } = await api.get('/articles', {
       params: {
-        status: status.value || undefined,
+        status: status.value === 'all' ? undefined : status.value,
         q: q.value || undefined,
         page: page.value,
         page_size: 12,
@@ -61,15 +61,16 @@ onMounted(load)
 
 <template>
   <div>
-    <div style="display:flex;gap:12px;margin-bottom:16px">
-      <el-select v-model="status" placeholder="全部状态" clearable style="width:140px" @change="page=1;load()">
-        <el-option label="草稿" value="draft" />
-        <el-option label="已通过" value="approved" />
-        <el-option label="已发布" value="published" />
-      </el-select>
+    <div style="display:flex;gap:12px;align-items:center;margin-bottom:8px">
+      <el-tabs v-model="status" @tab-change="page=1;load()">
+        <el-tab-pane label="全部" name="all" />
+        <el-tab-pane label="草稿" name="draft" />
+        <el-tab-pane label="已通过" name="approved" />
+        <el-tab-pane label="已发布" name="published" />
+      </el-tabs>
+      <div style="flex:1"></div>
       <el-input v-model="q" placeholder="搜索标题" clearable style="width:220px" @keyup.enter="page=1;load()" @clear="load()" />
       <el-button type="primary" @click="page=1;load()">搜索</el-button>
-      <div style="flex:1"></div>
       <el-button type="primary" :loading="creating" @click="createOne">一键创作</el-button>
     </div>
 
