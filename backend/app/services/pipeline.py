@@ -1,7 +1,9 @@
+import random
 import time
 from datetime import datetime
 from pathlib import Path
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models import Article, GenerationLog, Topic
@@ -172,3 +174,36 @@ def regen_images(db: Session, ark, article_id: int, count: int,
     db.commit()
     db.refresh(article)
     return article
+
+
+def pick_unused_topic(db: Session) -> Topic | None:
+    used_ids = db.query(Article.topic_id).filter(Article.topic_id.isnot(None))
+    return (
+        db.query(Topic)
+        .filter(Topic.enabled.is_(True), ~Topic.id.in_(used_ids))
+        .order_by(func.random())
+        .first()
+    )
+
+
+def auto_generate(db: Session, llm, ark, storage_root: Path,
+                  default_size: str, max_count: int) -> Article:
+    topic = pick_unused_topic(db)
+    if topic is None:
+        raise ValueError("题库中的问题已全部使用")
+    candidates = draft_conflicts(db, llm, topic_id=topic.id)
+    first = candidates[0]
+    data = BuildIn(
+        topic_id=topic.id,
+        conflict=first.conflict,
+        title=first.titles[0],
+        image_size=default_size,
+        image_count=1,
+        candidates=candidates,
+    )
+    return build_article(
+        db, llm, ark, data,
+        storage_root=storage_root,
+        default_size=default_size,
+        max_count=max_count,
+    )

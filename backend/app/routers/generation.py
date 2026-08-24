@@ -70,3 +70,27 @@ def api_regen_images(article_id: int, request: Request, body: dict | None = None
         raise HTTPException(404, str(exc))
     except Exception as exc:
         raise HTTPException(502, f"生成失败: {exc}")
+
+
+@router.post("/generation/auto")
+def api_auto(request: Request, count: int = 1, db: Session = Depends(get_db)):
+    n = min(max(count, 1), 5)
+    articles = []
+    errors = []
+    for _ in range(n):
+        try:
+            article = pipeline.auto_generate(
+                db, request.app.state.llm, request.app.state.ark,
+                storage_root=request.app.state.storage_root,
+                default_size=request.app.state.default_size,
+                max_count=request.app.state.max_count,
+            )
+            articles.append(ArticleOut.model_validate(article))
+        except ValueError as exc:
+            errors.append(str(exc))
+            break
+        except Exception as exc:
+            errors.append(f"生成失败: {exc}")
+    if not articles and errors:
+        raise HTTPException(400, errors[0])
+    return {"articles": articles, "errors": errors}
