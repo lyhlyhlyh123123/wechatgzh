@@ -1,175 +1,108 @@
 <script setup>
 import { ElMessage } from 'element-plus'
-import { computed, onMounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { onMounted, ref, watch } from 'vue'
 import { api, fileUrl } from '../api'
 
-const route = useRoute()
-const id = route.params.id
+const props = defineProps({ articleId: Number })
 const article = ref(null)
-const edit = ref({ title: '', body: '', image_prompt: '' })
-const candidates = ref([])
-const pickedTitle = ref('')
-const regenCount = ref(1)
 const busy = ref('')
 const statusText = { draft: '草稿', approved: '已通过', published: '已发布' }
 
 async function load() {
-  const { data } = await api.get(`/articles/${id}`)
+  if (!props.articleId) return
+  const { data } = await api.get(`/articles/${props.articleId}`)
   article.value = data
-  edit.value.title = data.title
-  edit.value.body = data.body
-  edit.value.image_prompt = data.image_prompt
-  const flat = []
-  for (const c of data.title_candidates || []) {
-    for (const t of c.titles || []) flat.push({ conflict: c.conflict, title: t })
-  }
-  candidates.value = flat.filter((x) => x.title !== data.title)
-}
-
-async function saveField(field) {
-  busy.value = `save_${field}`
-  try {
-    const { data } = await api.patch(`/articles/${id}`, { [field]: edit.value[field] })
-    article.value = data
-    if (field === 'title') {
-      candidates.value = candidates.value.filter((x) => x.title !== data.title)
-    }
-    ElMessage.success('已保存')
-  } finally {
-    busy.value = ''
-  }
-}
-
-async function regen(kind, payload) {
-  busy.value = kind
-  try {
-    const url = `/articles/${id}/regen-${kind}`
-    let data
-    if (payload) {
-      ;({ data } = await api.post(url, payload))
-    } else {
-      ;({ data } = await api.post(url))
-    }
-    article.value = data
-    if (kind === 'body') {
-      edit.value.body = data.body
-    }
-  } catch {
-    ElMessage.error('生成失败，请重试')
-  } finally {
-    busy.value = ''
-  }
-}
-
-async function adoptTitle() {
-  if (!pickedTitle.value) return
-  edit.value.title = pickedTitle.value
-  await saveField('title')
 }
 
 async function setStatus(status) {
   busy.value = 'status'
   try {
-    const { data } = await api.post(`/articles/${id}/status`, { status })
+    const { data } = await api.patch(`/articles/${props.articleId}`, { status })
     article.value = data
-  } finally {
-    busy.value = ''
-  }
+    ElMessage.success('已更新')
+  } finally { busy.value = '' }
+}
+
+async function remove() {
+  await api.delete(`/articles/${props.articleId}`)
+  ElMessage.success('已删除')
+  article.value = null
+}
+
+async function exportArticle() {
+  try {
+    const resp = await api.get(`/articles/${props.articleId}/export`, { responseType: 'blob' })
+    const url = URL.createObjectURL(resp.data)
+    const a = document.createElement('a'); a.href = url; a.download = `${article.value.title||'article'}.html`; a.click()
+    URL.revokeObjectURL(url)
+  } catch { ElMessage.error('导出失败') }
 }
 
 function copyText() {
   const text = `${article.value.title}\n\n${article.value.body}`
   navigator.clipboard.writeText(text).then(
-    () => ElMessage.success('已复制标题与正文'),
-    () => ElMessage.error('复制失败，请手动选择文本'),
+    () => ElMessage.success('已复制'),
+    () => ElMessage.error('复制失败'),
   )
 }
 
-const previewImages = computed(() =>
-  (article.value?.image_paths || []).map((p) => fileUrl(p)),
-)
-
+watch(() => props.articleId, load)
 onMounted(load)
 </script>
 
 <template>
-  <div v-if="article">
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
-      <el-tag :type="article.status === 'draft' ? 'info' : article.status === 'approved' ? 'success' : 'warning'">
-        {{ statusText[article.status] }}
-      </el-tag>
-      <el-radio-group :model-value="article.status" size="small" @change="setStatus">
-        <el-radio-button value="draft">草稿</el-radio-button>
-        <el-radio-button value="approved">通过</el-radio-button>
-        <el-radio-button value="published">已发布</el-radio-button>
-      </el-radio-group>
-      <div style="flex:1"></div>
-      <el-button @click="copyText">复制文案</el-button>
-      <a :href="`/api/articles/${id}/export.zip`">
-        <el-button type="primary" plain>下载 zip</el-button>
-      </a>
+  <div v-if="article" style="padding:24px;max-width:640px;margin:0 auto">
+    <h2 style="font-size:18px;margin:0 0 8px">{{ article.title }}</h2>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px">
+      <el-tag :type="{draft:'info',approved:'success',published:'warning'}[article.status]" size="small">{{ statusText[article.status] }}</el-tag>
+      <span style="color:#999;font-size:12px">{{ new Date(article.created_at).toLocaleString('zh-CN') }}</span>
     </div>
 
-    <el-row :gutter="20">
-      <el-col :span="10">
-        <el-card header="公众号预览">
-          <div style="background:#fff;padding:16px;border-radius:6px">
-            <h2 style="font-size:18px;line-height:1.5;margin:0 0 12px">{{ article.title }}</h2>
-            <p style="color:#555;line-height:1.8;white-space:pre-wrap;margin:0 0 12px">{{ article.body }}</p>
-            <el-image
-              v-for="(src, i) in previewImages"
-              :key="i"
-              :src="src"
-              fit="cover"
-              style="width:100%;margin-bottom:8px;display:block"
-              :preview-src-list="previewImages"
-              :initial-index="i"
-            />
-            <div style="color:#999;font-size:12px;text-align:center">{{ article.mood }}</div>
-          </div>
-        </el-card>
-      </el-col>
+    <div v-if="article.title_candidates" style="background:#fff;border-radius:8px;padding:14px;margin-bottom:10px;border:1px solid #ebeef5">
+      <div style="font-size:12px;color:#909399;margin-bottom:6px">标题候选</div>
+      <div v-for="(t,i) in (Array.isArray(article.title_candidates)?article.title_candidates:[])" :key="i" style="padding:4px 0;font-size:14px;border-bottom:1px solid #f5f5f5">
+        <template v-if="typeof t==='string'">{{ t }}</template>
+        <template v-else-if="t.titles"><div v-for="(tt,j) in t.titles" :key="j" style="padding:2px 0">{{ tt }}</div></template>
+      </div>
+    </div>
 
-      <el-col :span="14">
-        <el-card header="标题">
-          <el-input v-model="edit.title" />
-          <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-            <el-select v-model="pickedTitle" placeholder="候选标题" clearable style="flex:1;min-width:260px">
-              <el-option v-for="c in candidates" :key="c.title" :label="`${c.title}（${c.conflict}）`" :value="c.title" />
-            </el-select>
-            <el-button @click="adoptTitle">采用</el-button>
-            <el-button type="primary" :loading="busy === 'save_title'" @click="saveField('title')">保存标题</el-button>
-          </div>
-        </el-card>
+    <div style="background:#fff;border-radius:8px;padding:14px;margin-bottom:10px;border:1px solid #ebeef5">
+      <div style="font-size:12px;color:#909399;margin-bottom:6px">正文</div>
+      <div style="font-size:15px;line-height:1.8;white-space:pre-wrap">{{ article.body }}</div>
+    </div>
 
-        <el-card header="正文（30–60字）" style="margin-top:16px">
-          <el-input v-model="edit.body" type="textarea" :rows="4" />
-          <div style="margin-top:10px;display:flex;gap:10px">
-            <span style="color:#999;font-size:12px;line-height:32px">当前字数：{{ edit.body.length }}</span>
-            <div style="flex:1"></div>
-            <el-button :loading="busy === 'body'" @click="regen('body')">重写正文</el-button>
-            <el-button type="primary" :loading="busy === 'save_body'" @click="saveField('body')">保存正文</el-button>
-          </div>
-        </el-card>
+    <div v-if="article.mood" style="background:#fff;border-radius:8px;padding:10px 14px;margin-bottom:10px;border:1px solid #ebeef5">
+      <span style="font-size:12px;color:#909399">情绪标签：</span>
+      <el-tag size="small">{{ article.mood }}</el-tag>
+    </div>
 
-        <el-card header="配图" style="margin-top:16px">
-          <el-input v-model="edit.image_prompt" type="textarea" :rows="3" placeholder="图片提示词，可手动修改后重新生图" />
-          <div style="margin-top:10px;display:flex;gap:10px;align-items:center">
-            <span>数量</span>
-            <el-input-number v-model="regenCount" :min="1" :max="3" />
-            <el-button :loading="busy === 'images'" @click="saveField('image_prompt')">保存提示词</el-button>
-            <el-button type="primary" :loading="busy === 'images'" @click="regen('images', { count: regenCount })">
-              重新生图
-            </el-button>
-          </div>
-          <el-row :gutter="8" style="margin-top:12px">
-            <el-col v-for="(src, i) in previewImages" :key="i" :span="8">
-              <el-image :src="src" fit="cover" style="width:100%;height:160px" />
-            </el-col>
-          </el-row>
-        </el-card>
-      </el-col>
-    </el-row>
+    <div style="background:#fff;border-radius:8px;padding:14px;margin-bottom:10px;border:1px solid #ebeef5">
+      <div style="font-size:12px;color:#909399;margin-bottom:6px">图片提示词</div>
+      <div style="font-size:13px;color:#606266;line-height:1.6;word-break:break-all">{{ article.image_prompt }}</div>
+    </div>
+
+    <div v-if="article.image_paths?.length" style="margin-bottom:10px">
+      <div style="font-size:12px;color:#909399;margin-bottom:6px">生成图片</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <el-image v-for="(p,i) in article.image_paths" :key="i" :src="fileUrl(p)" fit="cover" style="width:180px;height:240px;border-radius:8px">
+          <template #error><div style="width:180px;height:240px;background:#f5f5f5;border-radius:8px"></div></template>
+        </el-image>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <el-button v-if="article.status==='draft'" type="success" size="small" @click="setStatus('approved')">通过</el-button>
+      <el-button v-if="article.status==='approved'" type="warning" size="small" @click="setStatus('published')">发布</el-button>
+      <el-button v-if="article.status==='published'" size="small" @click="setStatus('draft')">撤回</el-button>
+      <el-button size="small" @click="copyText">复制文案</el-button>
+      <el-button size="small" @click="exportArticle">导出</el-button>
+      <div style="flex:1"></div>
+      <el-button type="danger" size="small" @click="remove">删除</el-button>
+    </div>
+  </div>
+  <div v-else-if="props.articleId" v-loading="true" style="padding:40px"></div>
+  <div v-else style="text-align:center;color:#c0c4cc;padding-top:100px">
+    <div style="font-size:48px;margin-bottom:12px">📝</div>
+    <div>选择历史记录查看详情</div>
   </div>
 </template>
