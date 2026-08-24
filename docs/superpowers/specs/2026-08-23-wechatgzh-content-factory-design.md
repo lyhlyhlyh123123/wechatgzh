@@ -227,3 +227,11 @@ STORAGE_DIR=storage/runs
 5. **前端入口**
    - 内容包首页工具栏增加「AI 全自动」按钮：弹窗输入生成篇数（1–5），完成后刷新列表；人工仅进入详情页审核
 
+## 十四、v1.3 增补：端口与一键 EXE（2026-08-23 追加）
+
+1. **后端端口 8000 → 8787**：.env.example、config 默认值、start_backend.ps1、前端 dev 代理、README 同步修改
+2. **一键 EXE**：`build_exe.ps1` → PyInstaller onedir 产物 `backend/dist/GzhWorkbench/`
+   - 入口 `backend/run_app.py`：冻结模式把 CWD 锚定到 exe 目录；首启从 _internal 释放 templates/static；1.5s 后自动打开浏览器 `http://127.0.0.1:8787`
+   - 数据持久化在 exe 同级：data/(SQLite)、storage/(图片)、templates/prompts/(可编辑提示词)、.env
+   - 分发方式：整个 GzhWorkbench 文件夹打包发送
+
